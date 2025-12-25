@@ -206,8 +206,18 @@
         #monster-visual {
             width: 180px;
             height: 180px;
-            image-rendering: pixelated;
             transition: transform 0.1s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* CSS for inserted images */
+        #monster-visual img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated; /* Keeps retro look for images */
         }
 
         /* Animation Classes */
@@ -312,11 +322,10 @@
         .game-over-title { 
             font-size: 2rem; 
             color: var(--accent-red); 
-            margin: 20px 0 10px 0; /* 下マージンを少し減らす */
+            margin: 20px 0 10px 0;
             border-bottom: 2px solid var(--accent-red);
         }
         
-        /* 追加: 王様のセリフ用スタイル */
         .king-message {
             color: var(--accent-red);
             font-size: 1rem;
@@ -352,11 +361,10 @@
             color: var(--accent-yellow);
             font-weight: bold;
             animation: blink 1s infinite;
-            display: none; /* JS toggles this */
+            display: none; 
             margin-left: 10px;
         }
 
-        /* Stats Area in Result */
         .record-stats-area {
             font-size: 0.9rem;
             color: #888;
@@ -394,7 +402,6 @@
         }
         .delete-btn:hover { color: var(--accent-red); }
 
-        /* SVG Pixel Art Styling */
         svg { width: 100%; height: 100%; }
         .pixel-art rect { shape-rendering: crispEdges; }
 
@@ -434,7 +441,7 @@
             <!-- Monster -->
             <div id="monster-container">
                 <div id="monster-visual">
-                    <!-- SVG will be injected here -->
+                    <!-- Monster will be injected here -->
                 </div>
             </div>
 
@@ -456,13 +463,11 @@
         <div id="overlay">
             <div class="game-over-title" id="overlay-title">全滅した...</div>
             
-            <!-- 追加: 王様のセリフエリア -->
             <div id="king-msg" class="king-message"></div>
             
             <div class="result-container">
                 <div class="result-header">称号: <span id="alias-val">名もなき村人</span></div>
                 
-                <!-- New Record Badge -->
                 <div id="new-record-badge" class="new-record">★ NEW RECORD! ★</div>
 
                 <div style="text-align:center; font-size:0.9rem; color:#888; margin-bottom:10px;">
@@ -482,7 +487,7 @@
                     <!-- Items -->
                 </div>
                 
-                <!-- Adventure Records (Statistics) -->
+                <!-- Adventure Records -->
                 <div class="record-stats-area">
                     <div class="record-stat-box">
                         <span>そう ちょうせん</span>
@@ -503,7 +508,7 @@
 
     <script>
         /**
-         * QUEST of DUALISM - RPG Status Edition (Fixed Levels & Statistics & Audio)
+         * QUEST of DUALISM - Ver 5.1 (Image Hybrid)
          */
 
         // Game State
@@ -523,136 +528,74 @@
             items: []
         };
 
-        // --- Sound Manager (Web Audio API) ---
+        // --- Sound Manager ---
         const SoundManager = {
             ctx: null,
             muted: false,
-            
             init: function() {
                 if (!this.ctx) {
-                    try {
-                        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    } catch(e) {
-                        console.log("AudioContext not supported");
-                    }
+                    try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
                 }
-                if (this.ctx && this.ctx.state === 'suspended') {
-                    this.ctx.resume();
-                }
+                if (this.ctx && this.ctx.state === 'suspended') { this.ctx.resume(); }
             },
-            
             toggleMute: function() {
                 this.muted = !this.muted;
                 const btn = document.querySelector('.sound-toggle');
                 btn.innerText = this.muted ? "🔇" : "🔊";
-                // If unmuted, try init
                 if(!this.muted) this.init();
             },
-            
-            // Helper for simple oscillators
             playTone: function(freq, type, duration, startTime = 0, vol = 0.1) {
                 if (this.muted || !this.ctx) return;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = type;
                 osc.frequency.setValueAtTime(freq, this.ctx.currentTime + startTime);
-                
                 gain.gain.setValueAtTime(vol, this.ctx.currentTime + startTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + startTime + duration);
-                
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
                 osc.start(this.ctx.currentTime + startTime);
                 osc.stop(this.ctx.currentTime + startTime + duration);
             },
-            
-            // Helper for white noise
             playNoise: function(duration, vol = 0.1) {
                 if (this.muted || !this.ctx) return;
                 const bufferSize = this.ctx.sampleRate * duration;
                 const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
                 const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
-                }
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
                 const noise = this.ctx.createBufferSource();
                 noise.buffer = buffer;
                 const gain = this.ctx.createGain();
-                
                 gain.gain.setValueAtTime(vol, this.ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
-                
                 noise.connect(gain);
                 gain.connect(this.ctx.destination);
                 noise.start();
             },
-
-            // --- SFX Presets ---
-            playAttack: function() {
-                this.init();
-                this.playNoise(0.1, 0.2); // Hit noise
-                this.playTone(100, 'square', 0.1, 0, 0.1); // Impact
-            },
-            playDamage: function() {
-                this.init();
-                this.playTone(150, 'sawtooth', 0.3, 0, 0.2);
-                this.playTone(100, 'sawtooth', 0.3, 0.1, 0.2);
-            },
-            playLevelUp: function() {
-                this.init();
-                // Fanfare: Triad arpeggio
-                const t = 0.08;
-                this.playTone(523.25, 'square', 0.2, 0); // C
-                this.playTone(659.25, 'square', 0.2, t); // E
-                this.playTone(783.99, 'square', 0.2, t*2); // G
-                this.playTone(1046.50, 'square', 0.4, t*3); // C (High)
-            },
-            playClear: function() {
-                this.init();
-                // Victory Fanfare
-                const t = 0.12;
-                const v = 0.15;
-                const notes = [523.25, 659.25, 783.99, 1046.50, 0, 783.99, 1046.50];
-                notes.forEach((freq, i) => {
-                    if(freq > 0) this.playTone(freq, 'square', 0.3, i * t, v);
-                });
-            },
-            playGameOver: function() {
-                this.init();
-                // Sad slide
-                this.playTone(300, 'triangle', 0.5, 0, 0.2);
-                this.playTone(250, 'triangle', 0.5, 0.4, 0.2);
-                this.playTone(200, 'triangle', 1.0, 0.8, 0.2);
-            }
+            playAttack: function() { this.init(); this.playNoise(0.1, 0.2); this.playTone(100, 'square', 0.1, 0, 0.1); },
+            playDamage: function() { this.init(); this.playTone(150, 'sawtooth', 0.3, 0, 0.2); this.playTone(100, 'sawtooth', 0.3, 0.1, 0.2); },
+            playLevelUp: function() { this.init(); const t = 0.08; this.playTone(523.25, 'square', 0.2, 0); this.playTone(659.25, 'square', 0.2, t); this.playTone(783.99, 'square', 0.2, t*2); this.playTone(1046.50, 'square', 0.4, t*3); },
+            playClear: function() { this.init(); const t = 0.12; const v = 0.15; const notes = [523.25, 659.25, 783.99, 1046.50, 0, 783.99, 1046.50]; notes.forEach((freq, i) => { if(freq > 0) this.playTone(freq, 'square', 0.3, i * t, v); }); },
+            playGameOver: function() { this.init(); this.playTone(300, 'triangle', 0.5, 0, 0.2); this.playTone(250, 'triangle', 0.5, 0.4, 0.2); this.playTone(200, 'triangle', 1.0, 0.8, 0.2); }
         };
 
         // Item Database
-        const weaponNames = [
-            "ひのきのぼう", "こんぼう", "どうのつるぎ", "てつのやり", 
-            "はがねのつるぎ", "まどうしのつえ", "パルチザン", "はじゃのつるぎ", 
-            "ほのおのつるぎ", "こおりのやいば", "ドラゴンキラー", "あくまのオノ",
-            "らいじんのけん", "ひかりのつるぎ", "ゆうしゃのつるぎ", "でんせつのぶき"
-        ];
-        
-        const itemNames = [
-            "やくそう", "どくけしそう", "せいすい", "ちからのたね", 
-            "まもりのたね", "すばやさのたね", "いのちのきのみ", "ふしぎなきのみ",
-            "エルフののみぐすり", "せかいじゅのは"
-        ];
+        const weaponNames = ["ひのきのぼう", "こんぼう", "どうのつるぎ", "てつのやり", "はがねのつるぎ", "まどうしのつえ", "パルチザン", "はじゃのつるぎ", "ほのおのつるぎ", "こおりのやいば", "ドラゴンキラー", "あくまのオノ", "らいじんのけん", "ひかりのつるぎ", "ゆうしゃのつるぎ", "でんせつのぶき"];
+        const itemNames = ["やくそう", "どくけしそう", "せいすい", "ちからのたね", "まもりのたね", "すばやさのたね", "いのちのきのみ", "ふしぎなきのみ", "エルフののみぐすり", "せかいじゅのは"];
 
-        // Monster Definitions
+        // Monster Definitions with IDs for Image Fallback
         const monsterDefs = {
-            slime: { name: "スライム", color: "#4488ff", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] },
-            goblin: { name: "ゴブリン", color: "#4caf50", pixels: [{x:4,y:3,w:8,h:5}, {x:2,y:4,w:2,h:3}, {x:12,y:4,w:2,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:4,h:1,c:"#000"}, {x:4,y:8,w:8,h:6}, {x:2,y:9,w:2,h:3}, {x:12,y:9,w:2,h:3}] },
-            bat: { name: "コウモリ", color: "#aa44ff", pixels: [{x:1,y:4,w:2,h:3}, {x:3,y:6,w:1,h:2}, {x:4,y:7,w:1,h:2}, {x:5,y:8,w:1,h:1}, {x:13,y:4,w:2,h:3}, {x:12,y:6,w:1,h:2}, {x:11,y:7,w:1,h:2}, {x:10,y:8,w:1,h:1}, {x:6,y:6,w:4,h:4}, {x:7,y:7,w:1,h:1,c:"#fff"}, {x:9,y:7,w:1,h:1,c:"#fff"}] },
-            wolf: { name: "ウルフ", color: "#9e9e9e", pixels: [{x:2,y:5,w:4,h:4}, {x:6,y:6,w:8,h:5}, {x:6,y:11,w:2,h:3}, {x:12,y:11,w:2,h:3}, {x:3,y:6,w:1,h:1,c:"#fff"}, {x:14,y:7,w:2,h:2}] },
-            orc: { name: "オーク", color: "#795548", pixels: [{x:4,y:2,w:8,h:6}, {x:3,y:4,w:1,h:2}, {x:12,y:4,w:1,h:2}, {x:5,y:9,w:6,h:5}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:1,h:2,c:"#fff"}, {x:9,y:7,w:1,h:2,c:"#fff"}] },
-            skeleton: { name: "ガイコツ", color: "#e0e0e0", pixels: [{x:5,y:2,w:6,h:1}, {x:4,y:3,w:8,h:1}, {x:3,y:4,w:10,h:4}, {x:5,y:5,w:2,h:2,c:"#000"}, {x:9,y:5,w:2,h:2,c:"#000"}, {x:7,y:9,w:2,h:1,c:"#000"}, {x:4,y:10,w:8,h:1}, {x:5,y:11,w:6,h:1}, {x:5,y:12,w:1,h:2}, {x:7,y:12,w:1,h:2}, {x:9,y:12,w:1,h:2}] },
-            golem: { name: "ゴーレム", color: "#c19a6b", pixels: [{x:4,y:1,w:8,h:5}, {x:5,y:3,w:1,h:1,c:"#f00"}, {x:10,y:3,w:1,h:1,c:"#f00"}, {x:2,y:6,w:12,h:6}, {x:1,y:7,w:1,h:4}, {x:14,y:7,w:1,h:4}, {x:4,y:12,w:3,h:3}, {x:9,y:12,w:3,h:3}] },
-            chimera: { name: "キメラ", color: "#e91e63", pixels: [{x:6,y:2,w:4,h:4}, {x:4,y:6,w:8,h:5}, {x:1,y:4,w:3,h:6}, {x:12,y:4,w:3,h:6}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:5,y:11,w:2,h:3}, {x:9,y:11,w:2,h:3}] },
-            dragon: { name: "ドラゴン", color: "#44ff44", pixels: [{x:2,y:8,w:12,h:6}, {x:4,y:4,w:4,h:4}, {x:3,y:3,w:1,h:2}, {x:8,y:3,w:1,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:0,y:7,w:3,h:3}, {x:12,y:6,w:4,h:3}, {x:3,y:10,w:10,h:3,c:"#ffffaa"}] },
-            reaper: { name: "しにがみ", color: "#607d8b", pixels: [{x:6,y:2,w:4,h:4}, {x:5,y:6,w:6,h:8}, {x:12,y:3,w:1,h:10,c:"#aaa"}, {x:11,y:3,w:3,h:1,c:"#aaa"}, {x:4,y:8,w:8,h:0}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:8,y:3,w:1,h:1,c:"#000"}, {x:3,y:6,w:2,h:6, c:"#444"}] },
-            demon: { name: "まおう", color: "#8800ff", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}] }
+            slime: { id: "slime", name: "スライム", color: "#4488ff", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] },
+            goblin: { id: "goblin", name: "ゴブリン", color: "#4caf50", pixels: [{x:4,y:3,w:8,h:5}, {x:2,y:4,w:2,h:3}, {x:12,y:4,w:2,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:4,h:1,c:"#000"}, {x:4,y:8,w:8,h:6}, {x:2,y:9,w:2,h:3}, {x:12,y:9,w:2,h:3}] },
+            bat: { id: "bat", name: "コウモリ", color: "#aa44ff", pixels: [{x:1,y:4,w:2,h:3}, {x:3,y:6,w:1,h:2}, {x:4,y:7,w:1,h:2}, {x:5,y:8,w:1,h:1}, {x:13,y:4,w:2,h:3}, {x:12,y:6,w:1,h:2}, {x:11,y:7,w:1,h:2}, {x:10,y:8,w:1,h:1}, {x:6,y:6,w:4,h:4}, {x:7,y:7,w:1,h:1,c:"#fff"}, {x:9,y:7,w:1,h:1,c:"#fff"}] },
+            wolf: { id: "wolf", name: "ウルフ", color: "#9e9e9e", pixels: [{x:2,y:5,w:4,h:4}, {x:6,y:6,w:8,h:5}, {x:6,y:11,w:2,h:3}, {x:12,y:11,w:2,h:3}, {x:3,y:6,w:1,h:1,c:"#fff"}, {x:14,y:7,w:2,h:2}] },
+            orc: { id: "orc", name: "オーク", color: "#795548", pixels: [{x:4,y:2,w:8,h:6}, {x:3,y:4,w:1,h:2}, {x:12,y:4,w:1,h:2}, {x:5,y:9,w:6,h:5}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:1,h:2,c:"#fff"}, {x:9,y:7,w:1,h:2,c:"#fff"}] },
+            skeleton: { id: "skeleton", name: "ガイコツ", color: "#e0e0e0", pixels: [{x:5,y:2,w:6,h:1}, {x:4,y:3,w:8,h:1}, {x:3,y:4,w:10,h:4}, {x:5,y:5,w:2,h:2,c:"#000"}, {x:9,y:5,w:2,h:2,c:"#000"}, {x:7,y:9,w:2,h:1,c:"#000"}, {x:4,y:10,w:8,h:1}, {x:5,y:11,w:6,h:1}, {x:5,y:12,w:1,h:2}, {x:7,y:12,w:1,h:2}, {x:9,y:12,w:1,h:2}] },
+            golem: { id: "golem", name: "ゴーレム", color: "#c19a6b", pixels: [{x:4,y:1,w:8,h:5}, {x:5,y:3,w:1,h:1,c:"#f00"}, {x:10,y:3,w:1,h:1,c:"#f00"}, {x:2,y:6,w:12,h:6}, {x:1,y:7,w:1,h:4}, {x:14,y:7,w:1,h:4}, {x:4,y:12,w:3,h:3}, {x:9,y:12,w:3,h:3}] },
+            chimera: { id: "chimera", name: "キメラ", color: "#e91e63", pixels: [{x:6,y:2,w:4,h:4}, {x:4,y:6,w:8,h:5}, {x:1,y:4,w:3,h:6}, {x:12,y:4,w:3,h:6}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:5,y:11,w:2,h:3}, {x:9,y:11,w:2,h:3}] },
+            dragon: { id: "dragon", name: "ドラゴン", color: "#44ff44", pixels: [{x:2,y:8,w:12,h:6}, {x:4,y:4,w:4,h:4}, {x:3,y:3,w:1,h:2}, {x:8,y:3,w:1,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:0,y:7,w:3,h:3}, {x:12,y:6,w:4,h:3}, {x:3,y:10,w:10,h:3,c:"#ffffaa"}] },
+            reaper: { id: "reaper", name: "しにがみ", color: "#607d8b", pixels: [{x:6,y:2,w:4,h:4}, {x:5,y:6,w:6,h:8}, {x:12,y:3,w:1,h:10,c:"#aaa"}, {x:11,y:3,w:3,h:1,c:"#aaa"}, {x:4,y:8,w:8,h:0}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:8,y:3,w:1,h:1,c:"#000"}, {x:3,y:6,w:2,h:6, c:"#444"}] },
+            demon: { id: "demon", name: "まおう", color: "#8800ff", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}] }
         };
 
         const monsters = [
@@ -666,12 +609,11 @@
             Object.assign({}, monsterDefs.chimera),  // Lv8
             Object.assign({}, monsterDefs.dragon),   // Lv9
             Object.assign({}, monsterDefs.reaper),   // Lv10
-            Object.assign({}, monsterDefs.dragon, {name: "レッドドラゴン", color: "#ff4444"}), // Lv11
-            Object.assign({}, monsterDefs.reaper, {name: "しにがみ(強)", color: "#9c27b0"}), // Lv12
-            Object.assign({}, monsterDefs.demon)     // Lv13 (Last Boss)
+            Object.assign({}, monsterDefs.dragon, {id: "red_dragon", name: "レッドドラゴン", color: "#ff4444"}), // Lv11
+            Object.assign({}, monsterDefs.reaper, {id: "strong_reaper", name: "しにがみ(強)", color: "#9c27b0"}), // Lv12
+            Object.assign({}, monsterDefs.demon)     // Lv13
         ];
 
-        // Dialogue List
         const questions = [
             "わたしは　かみサマを　しんじるか？", "おまえは　ゆうしゃ　なのか？", "このせかいは　げんじつ　か？",
             "パンは　すきか？", "うしろに　だれか　いるか？", "じかんは　むげん　か？",
@@ -694,7 +636,6 @@
             "おまえは　いきて　いるか？", "わたしを　たおせるか？"
         ];
 
-        // Initialization
         window.onload = () => {
             loadData();
             startLevel(1);
@@ -708,10 +649,9 @@
             spawnMonster();
             updateUI();
             
-            // Stats Tracking: Count attempt on Level 1 start only (new run)
             if(lvl === 1) {
                 statsRecord.totalAttempts++;
-                saveData(); // Save incremented attempt
+                saveData(); 
                 
                 log(`[Lv${lvl}] ${currentMonster.name}が あらわれた！`);
                 document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
@@ -732,9 +672,27 @@
                 currentMonster = monsters[monsters.length - 1];
             }
 
+            renderMonsterVisual(currentMonster);
+        }
+
+        function renderMonsterVisual(monster) {
             const container = document.getElementById('monster-visual');
-            container.innerHTML = generateMonsterSVG(currentMonster);
-            container.className = ""; // reset anims
+            container.innerHTML = '';
+            container.className = ''; 
+
+            // Try loading Image first
+            const imgPath = `img/${monster.id}.png`;
+            const img = document.createElement('img');
+            img.src = imgPath;
+            img.alt = monster.name;
+            
+            // Fallback to SVG if image not found
+            img.onerror = function() {
+                this.remove();
+                container.innerHTML = generateMonsterSVG(monster);
+            };
+
+            container.appendChild(img);
         }
 
         function getRandomQuestion() {
@@ -742,7 +700,6 @@
         }
 
         function makeChoice(choice) {
-            // Audio Context is resumed on first interaction
             SoundManager.init();
 
             if (choice === 'left') choiceStats.yes++;
@@ -759,7 +716,7 @@
         }
 
         function handleSuccess() {
-            SoundManager.playAttack(); // SFX
+            SoundManager.playAttack(); 
 
             const vis = document.getElementById('monster-visual');
             vis.classList.add('anim-damage');
@@ -770,9 +727,8 @@
 
             levelUp();
 
-            // Clear Check (If current monster was Demon at Lv13)
             if (currentLevel === 13) {
-                statsRecord.totalClears++; // Increment Clear Count
+                statsRecord.totalClears++; 
                 saveData();
                 setTimeout(() => {
                     showGameClear();
@@ -801,7 +757,7 @@
             playerStats.mp = playerStats.maxMp;
             playerStats.atk += atkUp;
 
-            setTimeout(() => SoundManager.playLevelUp(), 200); // SFX Delayed slightly
+            setTimeout(() => SoundManager.playLevelUp(), 200); 
             log(`レベルがあがった！ (HP+${hpUp}, 攻+${atkUp})`, false, 'levelup');
 
             if (Math.random() < 0.3) {
@@ -811,7 +767,6 @@
 
         function dropItem() {
             let itemName = "";
-            
             if (Math.random() < 0.3) {
                 const tier = Math.min(Math.floor(currentLevel / 3), weaponNames.length - 1);
                 const randIndex = Math.max(0, tier - Math.floor(Math.random() * 2));
@@ -819,13 +774,12 @@
             } else {
                 itemName = itemNames[Math.floor(Math.random() * itemNames.length)];
             }
-
             playerStats.items.push(itemName);
             log(`${currentMonster.name}は ${itemName}を おとした！`, false, 'item');
         }
 
         function handleFailure() {
-            SoundManager.playDamage(); // SFX
+            SoundManager.playDamage(); 
 
             const vis = document.getElementById('monster-visual');
             vis.classList.add('anim-attack');
@@ -835,7 +789,7 @@
             playerStats.hp = 0;
             updateUI();
 
-            checkHighScore(); // Check and save if new record
+            checkHighScore(); 
 
             setTimeout(() => {
                 showGameOver(false);
@@ -843,7 +797,7 @@
         }
 
         function showGameClear() {
-            SoundManager.playClear(); // SFX
+            SoundManager.playClear(); 
 
             isGameClear = true;
             const vis = document.getElementById('monster-visual');
@@ -851,7 +805,7 @@
             
             log(`おめでとう！ まおうを たおした！`, false, 'success');
             
-            checkHighScore(); // Save Record
+            checkHighScore(); 
 
             setTimeout(() => {
                 showGameOver(true);
@@ -860,7 +814,6 @@
 
         function checkHighScore() {
             let isNewRecord = false;
-
             if (currentLevel > bestRecord.level) {
                 isNewRecord = true;
             } else if (currentLevel === bestRecord.level) {
@@ -868,7 +821,6 @@
                     isNewRecord = true;
                 }
             }
-            
             if (isNewRecord) {
                 bestRecord = {
                     level: currentLevel,
@@ -885,7 +837,7 @@
         }
 
         function showGameOver(isClear) {
-            if(!isClear) SoundManager.playGameOver(); // SFX
+            if(!isClear) SoundManager.playGameOver(); 
 
             const overlay = document.getElementById('overlay');
             const title = document.getElementById('overlay-title');
@@ -898,29 +850,26 @@
             if (isClear) {
                 overlay.classList.add('clear-mode');
                 title.innerText = "GAME CLEAR!!";
-                kingMsg.innerText = ""; // クリア時はセリフなし
+                kingMsg.innerText = ""; 
                 document.getElementById('true-fate-display').parentElement.style.display = 'none';
             } else {
                 overlay.classList.remove('clear-mode');
                 title.innerText = "全滅した...";
-                kingMsg.innerText = "しんでしまうとは なさけない..."; // セリフ設定
+                kingMsg.innerText = "しんでしまうとは なさけない..."; 
                 document.getElementById('true-fate-display').parentElement.style.display = 'block';
             }
 
             const isNew = (bestRecord.level === currentLevel && bestRecord.hp === playerStats.maxHp && bestRecord.alias === alias);
             document.getElementById('new-record-badge').style.display = isNew ? 'inline-block' : 'none';
 
-            // Result Stats
             document.getElementById('res-lvl').innerText = currentLevel;
             document.getElementById('res-hp').innerText = playerStats.maxHp;
             document.getElementById('res-mp').innerText = playerStats.maxMp;
             document.getElementById('res-atk').innerText = playerStats.atk;
             
-            // Display Total Stats
             document.getElementById('stat-attempts').innerText = statsRecord.totalAttempts;
             document.getElementById('stat-clears').innerText = statsRecord.totalClears;
             
-            // Loot
             const lootContainer = document.getElementById('loot-list');
             lootContainer.innerHTML = '';
             if (playerStats.items.length === 0) {
@@ -942,7 +891,6 @@
             choiceStats = { yes: 0, no: 0 };
             isGameClear = false;
             
-            // Reset Stats
             playerStats = {
                 hp: 20, maxHp: 20,
                 mp: 5, maxMp: 5,
@@ -963,14 +911,11 @@
                 localStorage.removeItem('abyss_rpg_save_v1');
                 localStorage.removeItem('abyss_rpg_stats_v1');
                 alert("きろくは まっしょう されました。");
-                location.reload(); // 確実にリセットするためにリロード
+                location.reload(); 
             }
         }
 
-        // --- Helper Functions ---
-
         function generateMonsterSVG(data) {
-            const pixelSize = 1; 
             let rects = "";
             data.pixels.forEach(p => {
                 const color = p.c ? p.c : data.color;
@@ -1004,7 +949,6 @@
             document.getElementById('prob-val').innerText = probStr;
         }
 
-        // --- Alias System ---
         function generateAlias(lvl, stats) {
             const total = stats.yes + stats.no;
             if (lvl <= 1) return "瞬殺されし者";
@@ -1038,11 +982,8 @@
             return prefix + suffix;
         }
 
-        // --- Save Data ---
         function saveData() {
-            // Save structured best record
             localStorage.setItem('abyss_rpg_save_v1', JSON.stringify(bestRecord));
-            // Save Statistics
             localStorage.setItem('abyss_rpg_stats_v1', JSON.stringify(statsRecord));
         }
         
