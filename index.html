@@ -167,28 +167,30 @@
             position: absolute; 
             top: 5px; right: 10px; 
             display: flex;
-            gap: 10px;
+            gap: 5px;
             align-items: center;
         }
 
         .highscore-display { 
             font-size: 0.8rem; color: var(--accent-yellow); 
             background: #000; padding: 0 5px;
+            margin-right: 5px;
         }
         
         .ctrl-btn {
             background: transparent;
             border: 1px solid #555;
             color: #fff;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             cursor: pointer;
-            height: 30px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 0 10px;
+            padding: 0 8px;
             border-radius: 4px;
             font-family: var(--font-main);
+            min-width: 30px;
         }
         .ctrl-btn:hover { border-color: #fff; }
         
@@ -197,6 +199,12 @@
             color: #000;
             border-color: var(--accent-blue);
             animation: pulse 1s infinite;
+        }
+        
+        /* Visual Toggle Button Style */
+        .visual-toggle {
+            font-weight: bold;
+            width: 40px;
         }
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
@@ -375,17 +383,25 @@
             margin-left: 10px;
         }
 
+        /* Stats Area in Result */
         .record-stats-area {
             font-size: 0.9rem;
             color: #888;
             margin-top: 10px;
             border-top: 1px solid #333;
             padding-top: 10px;
+        }
+        
+        .stats-row {
             display: flex;
             justify-content: space-around;
+            margin-bottom: 8px;
         }
-        .record-stat-box { text-align: center; }
+        .stats-row:last-child { margin-bottom: 0; }
+
+        .record-stat-box { text-align: center; min-width: 80px; }
         .record-stat-num { color: #fff; font-size: 1.2rem; display: block; }
+        .record-stat-label { font-size: 0.7rem; display: block; }
 
         .alias-val { font-size: 1.5rem; color: #fff; font-weight: bold; text-align: center; margin: 10px 0;}
 
@@ -432,6 +448,7 @@
         <section id="game-area">
             <div class="top-controls">
                 <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">0</span></div>
+                <button class="ctrl-btn visual-toggle" onclick="toggleVisualMode()" id="visual-btn" title="画質切替">IMG</button>
                 <button class="ctrl-btn auto-btn" onclick="toggleAutoMode()" id="auto-btn">AUTO OFF</button>
                 <button class="ctrl-btn sound-toggle" onclick="SoundManager.toggleMute()" title="サウンドON/OFF">🔊</button>
             </div>
@@ -500,13 +517,28 @@
                 
                 <!-- Adventure Records -->
                 <div class="record-stats-area">
-                    <div class="record-stat-box">
-                        <span>そう ちょうせん</span>
-                        <span class="record-stat-num" id="stat-attempts">0</span>
+                    <!-- Row 1: Play Counts -->
+                    <div class="stats-row">
+                        <div class="record-stat-box">
+                            <span class="record-stat-label">冒険回数</span>
+                            <span class="record-stat-num" id="stat-attempts">0</span>
+                        </div>
+                        <div class="record-stat-box">
+                            <span class="record-stat-label">クリア回数</span>
+                            <span class="record-stat-num" id="stat-clears">0</span>
+                        </div>
                     </div>
-                    <div class="record-stat-box">
-                        <span>クリアかいすう</span>
-                        <span class="record-stat-num" id="stat-clears">0</span>
+                    
+                    <!-- Row 2: Choices & Rate -->
+                    <div class="stats-row">
+                        <div class="record-stat-box">
+                            <span class="record-stat-label">総選択数</span>
+                            <span class="record-stat-num" id="stat-choices">0</span>
+                        </div>
+                        <div class="record-stat-box">
+                            <span class="record-stat-label">運命的中率</span>
+                            <span class="record-stat-num" id="stat-rate">0%</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -519,13 +551,17 @@
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 6.0 (Auto Mode)
+         * QUEST of DUALISM - Ver 8.0 (Detailed Statistics)
          */
 
         // Game State
         let currentLevel = 0;
         let bestRecord = { level: 0, items: [], alias: "なし" }; 
-        let statsRecord = { totalAttempts: 0, totalClears: 0 }; 
+        // 統計データの拡張: 選択数と成功数を追加
+        let statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0 }; 
+        // Settings State
+        let gameSettings = { isPixelMode: false };
+        
         let predeterminedFate = null; 
         let choiceStats = { yes: 0, no: 0 };
         let currentMonster = null;
@@ -654,6 +690,7 @@
 
         window.onload = () => {
             loadData();
+            updateVisualBtn();
             startLevel(1);
         };
 
@@ -672,6 +709,23 @@
                 btn.classList.remove('active');
                 if(autoTimeout) clearTimeout(autoTimeout);
             }
+        }
+
+        // --- Visual Mode Control ---
+        function toggleVisualMode() {
+            gameSettings.isPixelMode = !gameSettings.isPixelMode;
+            updateVisualBtn();
+            saveSettings();
+            
+            // Redraw current monster if alive and not on result screen
+            if (currentMonster && !document.getElementById('overlay').classList.contains('active')) {
+                renderMonsterVisual(currentMonster);
+            }
+        }
+
+        function updateVisualBtn() {
+            const btn = document.getElementById('visual-btn');
+            btn.innerText = gameSettings.isPixelMode ? "DOT" : "IMG";
         }
 
         function processAutoTurn() {
@@ -749,6 +803,13 @@
             container.innerHTML = '';
             container.className = ''; 
 
+            // Force Pixel Mode
+            if (gameSettings.isPixelMode) {
+                container.innerHTML = generateMonsterSVG(monster);
+                return;
+            }
+
+            // Image Priority Mode (Hybrid)
             const imgPath = `img/${monster.id}.png`;
             const img = document.createElement('img');
             img.src = imgPath;
@@ -771,6 +832,10 @@
             isProcessing = true;
             SoundManager.init();
 
+            // 統計: 総選択回数を加算
+            statsRecord.totalChoices++;
+            saveData();
+
             if (choice === 'left') choiceStats.yes++;
             else choiceStats.no++;
             const isCorrect = (choice === predeterminedFate);
@@ -786,6 +851,10 @@
 
         function handleSuccess() {
             SoundManager.playAttack(); 
+
+            // 統計: 成功回数を加算
+            statsRecord.totalSuccesses++;
+            saveData();
 
             const vis = document.getElementById('monster-visual');
             vis.classList.add('anim-damage');
@@ -953,8 +1022,18 @@
             document.getElementById('res-mp').innerText = playerStats.maxMp;
             document.getElementById('res-atk').innerText = playerStats.atk;
             
+            // 統計表示の更新
             document.getElementById('stat-attempts').innerText = statsRecord.totalAttempts;
             document.getElementById('stat-clears').innerText = statsRecord.totalClears;
+            document.getElementById('stat-choices').innerText = statsRecord.totalChoices;
+            
+            // 的中率の計算
+            let rate = 0;
+            if (statsRecord.totalChoices > 0) {
+                rate = (statsRecord.totalSuccesses / statsRecord.totalChoices) * 100;
+            }
+            // 小数点第1位まで表示 (例: 50.5%)
+            document.getElementById('stat-rate').innerText = rate.toFixed(1) + "%";
             
             const lootContainer = document.getElementById('loot-list');
             lootContainer.innerHTML = '';
@@ -1005,6 +1084,7 @@
             if(confirm("ほんとうに きろくを すべて けしますか？\n（ページが リロード されます）")) {
                 localStorage.removeItem('abyss_rpg_save_v1');
                 localStorage.removeItem('abyss_rpg_stats_v1');
+                localStorage.removeItem('abyss_rpg_settings_v1'); 
                 alert("きろくは まっしょう されました。");
                 location.reload(); 
             }
@@ -1078,6 +1158,18 @@
             return prefix + suffix;
         }
 
+        // --- Settings Management ---
+        function saveSettings() {
+            localStorage.setItem('abyss_rpg_settings_v1', JSON.stringify(gameSettings));
+        }
+
+        function loadSettings() {
+            const raw = localStorage.getItem('abyss_rpg_settings_v1');
+            if(raw) {
+                gameSettings = JSON.parse(raw);
+            }
+        }
+
         function saveData() {
             localStorage.setItem('abyss_rpg_save_v1', JSON.stringify(bestRecord));
             localStorage.setItem('abyss_rpg_stats_v1', JSON.stringify(statsRecord));
@@ -1093,10 +1185,19 @@
             
             const statsRaw = localStorage.getItem('abyss_rpg_stats_v1');
             if(statsRaw) {
-                statsRecord = JSON.parse(statsRaw);
+                const loaded = JSON.parse(statsRaw);
+                // 既存データに新しいフィールドがない場合のデフォルト値を設定
+                statsRecord = {
+                    totalAttempts: loaded.totalAttempts || 0,
+                    totalClears: loaded.totalClears || 0,
+                    totalChoices: loaded.totalChoices || 0,
+                    totalSuccesses: loaded.totalSuccesses || 0
+                };
             } else {
-                statsRecord = { totalAttempts: 0, totalClears: 0 };
+                statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0 };
             }
+            
+            loadSettings(); // Load visual settings
         }
     </script>
 </body>
