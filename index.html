@@ -297,6 +297,10 @@
         .anim-clear { animation: spinAndScale 1.5s forwards; }
         .anim-true-clear { animation: trueClearAnim 3s forwards; }
         .anim-talk { animation: talkBounce 0.5s ease-in-out; }
+        .anim-revive { animation: reviveFlash 1s forwards; }
+        .anim-clash { animation: clashShake 1s infinite; }
+        .anim-hide { animation: fadeOut 0.5s forwards; }
+        .anim-show { animation: fadeIn 0.5s forwards; }
 
         @keyframes shake { 10%, 90% { transform: translate3d(-4px, 0, 0); } 20%, 80% { transform: translate3d(6px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }
         @keyframes attack { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
@@ -309,6 +313,11 @@
             100% { transform: scale(0); filter: brightness(0); opacity: 0; } 
         }
         @keyframes talkBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        @keyframes reviveFlash { 0% { filter: brightness(0); } 50% { filter: brightness(2) drop-shadow(0 0 10px #fff); } 100% { filter: brightness(1); } }
+        @keyframes clashShake { 0% { transform: translate(0,0); } 25% { transform: translate(5px, -5px); } 50% { transform: translate(-5px, 5px); } 75% { transform: translate(5px, 5px); } 100% { transform: translate(0,0); } }
+        @keyframes fadeOut { to { opacity: 0; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 
         /* Message Window (Question) */
         #message-window {
@@ -738,7 +747,7 @@
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 16.0 (Ending Messages)
+         * QUEST of DUALISM - Ver 17.0 (Dramatic Boss Battle)
          */
 
         // Game State
@@ -826,6 +835,21 @@
                     const freq = base * (1 + Math.random()*4);
                     this.playTone(freq, 'sawtooth', 0.1, i*0.05, 0.1);
                 }
+            },
+            playRevive: function() {
+                this.init();
+                this.playTone(400, 'sine', 0.5, 0, 0.2);
+                this.playTone(800, 'sine', 1.0, 0.5, 0.2);
+            },
+            playFakeClear: function() {
+                this.init();
+                // Broken Fanfare
+                const t = 0.1;
+                this.playTone(523.25, 'square', 0.2, 0); 
+                this.playTone(659.25, 'square', 0.2, t); 
+                setTimeout(() => {
+                   this.playNoise(0.5, 0.3); // Crash
+                }, 300);
             }
         };
 
@@ -1114,6 +1138,113 @@
         }
 
         function handleSuccess() {
+            // Lv13の場合、ドラマチック演出分岐
+            if (currentFloor === 13) {
+                 handleBossBattleDrama(true);
+            } else {
+                 executeSuccess();
+            }
+        }
+
+        function handleFailure() {
+            // Lv13の場合、ドラマチック演出分岐
+            if (currentFloor === 13) {
+                 handleBossBattleDrama(false);
+            } else {
+                 executeFailure();
+            }
+        }
+        
+        // Drama logic for Boss Battle
+        function handleBossBattleDrama(isActuallyCorrect) {
+            const roll = Math.random();
+            const msgWin = document.getElementById('message-window');
+            
+            if (isActuallyCorrect) {
+                // 正解ルート（最終的に勝つ）
+                if (roll < 0.3) {
+                    // パターンB: 逆転勝利 (30%)
+                    SoundManager.playDamage();
+                    const vis = document.getElementById('monster-visual');
+                    vis.classList.add('anim-attack');
+                    msgWin.innerText = `${currentMonster.name}の こうげき！ ゆうしゃは しんでしまった...`;
+                    log(`ゆうしゃは しんでしまった...`, true);
+                    
+                    setTimeout(() => {
+                        SoundManager.playRevive();
+                        document.body.style.backgroundColor = '#fff';
+                        setTimeout(() => document.body.style.backgroundColor = 'var(--bg-color)', 200);
+                        
+                        msgWin.innerText = "しかし ゆうしゃは よみがえった！";
+                        log("しかし ゆうしゃは よみがえった！", false, 'success');
+                        
+                        setTimeout(() => {
+                            msgWin.innerText = "ゆうしゃの さいごの いちげき！";
+                            executeSuccess();
+                        }, 1500);
+                    }, 1500);
+                    
+                } else if (roll < 0.6) {
+                    // パターンC: 競り合い勝利 (30%)
+                    SoundManager.playAttack();
+                    const vis = document.getElementById('monster-visual');
+                    vis.classList.add('anim-clash');
+                    msgWin.innerText = "はげしい つばぜりあいが つづいている！";
+                    log("はげしい つばぜりあいが つづいている！", false, 'system');
+                    
+                    setTimeout(() => {
+                        msgWin.innerText = "ゆうしゃが おしきった！";
+                        vis.classList.remove('anim-clash');
+                        executeSuccess();
+                    }, 1500);
+                } else {
+                    // パターンA: 通常勝利 (40%)
+                    executeSuccess();
+                }
+            } else {
+                // 不正解ルート（最終的に負ける）
+                if (roll < 0.3) {
+                    // パターンD: 絶望敗北 (30%)
+                    SoundManager.playAttack();
+                    const vis = document.getElementById('monster-visual');
+                    vis.classList.add('anim-damage');
+                    vis.classList.add('anim-shake');
+                    msgWin.innerText = `${currentMonster.name}を たおした！`;
+                    log(`${currentMonster.name}を たおした！`, false, 'success');
+                    
+                    // Fake clear sound
+                    SoundManager.playFakeClear();
+                    
+                    setTimeout(() => {
+                        vis.classList.remove('anim-damage');
+                        vis.classList.add('anim-show'); // Re-appear
+                        msgWin.innerText = `${currentMonster.name}「...と おもったか？」`;
+                        log(`${currentMonster.name}「...と おもったか？」`, true);
+                        
+                        setTimeout(() => {
+                            executeFailure();
+                        }, 1500);
+                    }, 1500);
+
+                } else if (roll < 0.5) {
+                    // パターンE: 命乞い (20%)
+                    msgWin.innerText = `${currentMonster.name}「わかった。せかいの はんぶんを やろう」`;
+                    log(`${currentMonster.name}は いのちごいを してきた！`, false, 'system');
+                    
+                    setTimeout(() => {
+                        msgWin.innerText = "ゆうしゃが ゆだんした すきに こうげきしてきた！";
+                        executeFailure();
+                    }, 2000);
+                    
+                } else {
+                    // 通常敗北
+                    executeFailure();
+                }
+            }
+        }
+
+        // Real Success Logic
+        function executeSuccess() {
             SoundManager.playAttack(); 
 
             statsRecord.totalSuccesses++;
@@ -1246,8 +1377,9 @@
             const dropMsg = isRare ? `★レア！ ${itemName}を おとした！` : `${itemName}を おとした！`;
             log(`${currentMonster.name}は ${dropMsg}`, false, 'item');
         }
-
-        function handleFailure() {
+        
+        // Real Failure Logic
+        function executeFailure() {
             SoundManager.playDamage(); 
 
             const vis = document.getElementById('monster-visual');
@@ -1264,6 +1396,14 @@
             setTimeout(() => {
                 showGameOver(false);
             }, failDelay);
+        }
+
+        function handleFailure() {
+            if (currentFloor === 13) {
+                handleBossBattleDrama(false);
+            } else {
+                executeFailure();
+            }
         }
 
         function showGameClear() {
