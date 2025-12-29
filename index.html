@@ -15,6 +15,7 @@
             --accent-blue: #4488ff;  /* Magic/Effect */
             --accent-yellow: #ffeb3b; /* Gold/Item */
             --accent-green: #4caf50; /* HP/Success */
+            --accent-metal: #e0e0e0; /* Metal Slime */
             --font-main: 'DotGothic16', sans-serif;
             --window-border: 2px solid #ffffff;
             --window-radius: 4px;
@@ -135,6 +136,7 @@
         .log-entry.levelup { color: var(--accent-green); }
         .log-entry.system { color: #888; }
         .log-entry.true-boss { color: #f0f; font-weight: bold; text-shadow: 0 0 5px #f00; }
+        .log-entry.metal { color: var(--accent-metal); font-weight: bold; text-shadow: 0 0 5px #fff; }
 
         /* Main Game Area */
         #game-area {
@@ -231,6 +233,7 @@
         .stat-item { display: flex; gap: 5px; align-items: baseline; }
         .stat-label { color: #aaa; font-size: 0.8em; }
         .stat-val { color: #fff; font-weight: bold; }
+        .stat-val.floor { color: var(--accent-yellow); font-size: 1.2em; }
         .stat-val.hp { color: var(--accent-green); }
         .stat-val.mp { color: var(--accent-blue); }
 
@@ -274,6 +277,16 @@
             60% { transform: translate(2px, 2px); }
             80% { transform: translate(2px, -2px) scale(0.98); }
             100% { transform: translate(0) scale(1); }
+        }
+        
+        /* Metal Slime Shine */
+        .metal-visual {
+            filter: drop-shadow(0 0 5px #fff) brightness(1.2);
+            animation: metal-shine 2s infinite linear;
+        }
+        @keyframes metal-shine {
+            0% { filter: drop-shadow(0 0 5px #fff) brightness(1.2) hue-rotate(0deg); }
+            100% { filter: drop-shadow(0 0 5px #fff) brightness(1.2) hue-rotate(360deg); }
         }
 
         /* Animation Classes */
@@ -546,7 +559,7 @@
         <section id="game-area">
             <!-- 修正: ヘッダーとして配置し、絶対配置を廃止。Flexでレイアウト管理 -->
             <div class="top-controls">
-                <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">0</span></div>
+                <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">B0F</span></div>
                 <button class="ctrl-btn" onclick="openBestiary()" title="図鑑を見る">📖</button>
                 <button class="ctrl-btn visual-toggle" onclick="toggleVisualMode()" id="visual-btn" title="画質切替">IMG</button>
                 <button class="ctrl-btn auto-btn" onclick="toggleAutoMode()" id="auto-btn">AUTO OFF</button>
@@ -556,11 +569,12 @@
             <!-- Status -->
             <div class="status-container">
                 <div class="status-row">
+                    <div class="stat-item"><span class="stat-label">FLOOR</span><span class="stat-val floor" id="floor-val">B1F</span></div>
                     <div class="stat-item"><span class="stat-label">LV</span><span class="stat-val" id="level-val">1</span></div>
                     <div class="stat-item"><span class="stat-label">HP</span><span class="stat-val hp" id="hp-val">20</span></div>
-                    <div class="stat-item"><span class="stat-label">MP</span><span class="stat-val mp" id="mp-val">5</span></div>
                 </div>
                 <div class="status-row secondary">
+                    <div class="stat-item"><span class="stat-label">MP</span><span class="stat-val mp" id="mp-val">5</span></div>
                     <div class="stat-item"><span class="stat-label">こうげき</span><span class="stat-val" id="atk-val">10</span></div>
                     <div class="stat-item" style="margin-left:auto; font-size:0.8rem;"><span class="stat-label">確率:</span> 1/<span id="prob-val">2</span></div>
                 </div>
@@ -612,6 +626,7 @@
 
                 <div class="result-header">最終ステータス</div>
                 <div class="result-stats">
+                    <span>到達: <span id="res-floor">B1F</span></span>
                     <span>LV: <span id="res-lvl">1</span></span>
                     <span>HP: <span id="res-hp">0</span></span>
                     <span>MP: <span id="res-mp">0</span></span>
@@ -676,12 +691,13 @@
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 13.0 (True Demon Update)
+         * QUEST of DUALISM - Ver 14.0 (Split Level & Metal Slime)
          */
 
         // Game State
-        let currentLevel = 0;
-        let bestRecord = { level: 0, items: [], alias: "なし" }; 
+        let currentFloor = 0; // 階層 (B1F...) ハイスコア対象
+        let playerLevel = 1;  // 強さ
+        let bestRecord = { floor: 0, items: [], alias: "なし" }; // Changed level to floor
         let statsRecord = { 
             totalAttempts: 0, totalClears: 0, trueClears: 0, totalChoices: 0, totalSuccesses: 0,
             collectedItems: [], collectedAliases: [] 
@@ -758,7 +774,6 @@
             playGameOver: function() { this.init(); this.playTone(300, 'triangle', 0.5, 0, 0.2); this.playTone(250, 'triangle', 0.5, 0.4, 0.2); this.playTone(200, 'triangle', 1.0, 0.8, 0.2); },
             playTrueClear: function() { 
                 this.init(); 
-                // Crazy Arpeggio
                 const base = 220; 
                 for(let i=0; i<30; i++) {
                     const freq = base * (1 + Math.random()*4);
@@ -802,8 +817,12 @@
             "鉄鉱石", "銅鉱石", "銀鉱石", "金鉱石", "ミスリル鉱石", "オリハルコン鉱石", "アダマンタイト", "ダークマター", "賢者の石のかけら", "星の砂",
             "ドラゴンの鱗", "ユニコーンの角", "グリフォンの羽", "スライムの体液", "ゴブリンの腰布", "オークの牙", "吸血鬼の灰", "悪魔のしっぽ", "天使の輪", "神の涙"
         ];
+        
+        const rareItems = [
+            "しあわせのくつ", "メタルの剣", "幸運のコイン", "プラチナチケット", "はぐれのさとり", "メタルキングの盾"
+        ];
 
-        const allItemsList = [...weaponNames, ...itemNames].sort();
+        const allItemsList = [...weaponNames, ...itemNames, ...rareItems].sort();
 
         const monsterDefs = {
             slime: { id: "slime", name: "スライム", color: "#4488ff", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] },
@@ -817,8 +836,9 @@
             dragon: { id: "dragon", name: "ドラゴン", color: "#44ff44", pixels: [{x:2,y:8,w:12,h:6}, {x:4,y:4,w:4,h:4}, {x:3,y:3,w:1,h:2}, {x:8,y:3,w:1,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:0,y:7,w:3,h:3}, {x:12,y:6,w:4,h:3}, {x:3,y:10,w:10,h:3,c:"#ffffaa"}] },
             reaper: { id: "reaper", name: "しにがみ", color: "#607d8b", pixels: [{x:6,y:2,w:4,h:4}, {x:5,y:6,w:6,h:8}, {x:12,y:3,w:1,h:10,c:"#aaa"}, {x:11,y:3,w:3,h:1,c:"#aaa"}, {x:4,y:8,w:8,h:0}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:8,y:3,w:1,h:1,c:"#000"}, {x:3,y:6,w:2,h:6, c:"#444"}] },
             demon: { id: "demon", name: "まおう", color: "#8800ff", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}] },
-            // True Demon added
-            true_demon: { id: "true_demon", name: "真・魔王", color: "#000", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}, {x:7,y:0,w:2,h:1,c:"#ffd700"}] }
+            true_demon: { id: "true_demon", name: "真・魔王", color: "#000", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}, {x:7,y:0,w:2,h:1,c:"#ffd700"}] },
+            // Metal Slime added
+            metal_slime: { id: "metal_slime", name: "メタルスライム", color: "#c0c0c0", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] }
         };
 
         const monsters = [
@@ -904,8 +924,8 @@
             const overlay = document.getElementById('overlay');
             if(overlay.classList.contains('active')) return;
 
-            // 追加: 最終ステージ(Lv13)なら強制停止
-            if (currentLevel === 13) {
+            // 最終ステージ(Lv13)なら強制停止
+            if (currentFloor === 13) {
                 isAutoMode = false;
                 document.getElementById('auto-btn').innerText = "AUTO OFF";
                 document.getElementById('auto-btn').classList.remove('active');
@@ -913,7 +933,7 @@
                 return;
             }
 
-            if(bestRecord.level > 0 && currentLevel === bestRecord.level) {
+            if(bestRecord.floor > 0 && currentFloor === bestRecord.floor) {
                 isAutoMode = false;
                 document.getElementById('auto-btn').innerText = "AUTO OFF";
                 document.getElementById('auto-btn').classList.remove('active');
@@ -934,17 +954,18 @@
         // --- Core Game Logic ---
 
         function startLevel(lvl) {
-            currentLevel = lvl;
+            currentFloor = lvl;
             determineFate();
             spawnMonster();
             updateUI();
             isProcessing = false;
             
             if(lvl === 1) {
+                playerLevel = 1; // Reset Player Level on new game
                 statsRecord.totalAttempts++;
                 saveData(); 
                 
-                log(`[Lv${lvl}] ${currentMonster.name}が あらわれた！`);
+                log(`[B${lvl}F] ${currentMonster.name}が あらわれた！`);
                 document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
                 
                 if(isAutoMode) {
@@ -960,14 +981,21 @@
         }
 
         function spawnMonster() {
-            const idx = currentLevel - 1;
+            const idx = currentFloor - 1;
             
             // True Demon Chance at Level 13
-            if (currentLevel === 13 && Math.random() < 0.1) {
+            if (currentFloor === 13 && Math.random() < 0.1) {
                 currentMonster = Object.assign({}, monsterDefs.true_demon);
                 document.body.classList.add('true-demon-mode');
                 log("！！！　しんの　まおうが　あらわれた　！！！", false, 'true-boss');
-            } else if (idx < monsters.length) {
+            } 
+            // Metal Slime Chance (Not last floor)
+            else if (currentFloor < 13 && Math.random() < 0.033) { // 1/30
+                currentMonster = Object.assign({}, monsterDefs.metal_slime);
+                log("！　メタルスライムが　あらわれた　！", false, 'metal');
+            }
+            // Regular Monster
+            else if (idx < monsters.length) {
                 currentMonster = monsters[idx];
             } else {
                 currentMonster = monsters[monsters.length - 1];
@@ -983,6 +1011,8 @@
             
             if(monster.id === 'true_demon') {
                 container.className = 'true-demon-visual';
+            } else if (monster.id === 'metal_slime') {
+                container.className = 'metal-visual';
             }
 
             if (gameSettings.isPixelMode) {
@@ -1041,11 +1071,15 @@
             log(`${currentMonster.name}に ${playerStats.atk}の ダメージ！`);
             log(`${currentMonster.name}を たおした！`, false, 'success');
 
-            levelUp();
+            let levelGain = 1;
+            if (currentMonster.id === 'metal_slime') {
+                levelGain = 5;
+            }
+            levelUp(levelGain);
 
             const nextDelay = isAutoMode ? 400 : 800; 
 
-            if (currentLevel === 13) {
+            if (currentFloor === 13) {
                 if (currentMonster.id === 'true_demon') {
                     statsRecord.trueClears = (statsRecord.trueClears || 0) + 1;
                     isTrueClear = true;
@@ -1057,11 +1091,11 @@
                 }, 1000);
             } else {
                 setTimeout(() => {
-                    currentLevel++;
+                    currentFloor++;
                     determineFate();
                     spawnMonster();
                     
-                    log(`[Lv${currentLevel}] ${currentMonster.name}が あらわれた！`);
+                    log(`[B${currentFloor}F] ${currentMonster.name}が あらわれた！`);
                     document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
                     updateUI();
                     
@@ -1073,38 +1107,55 @@
             }
         }
 
-        function levelUp() {
-            const hpUp = Math.floor(Math.random() * 5) + 1;
-            const mpUp = Math.floor(Math.random() * 3);
-            const atkUp = Math.floor(Math.random() * 2) + 1;
+        function levelUp(gain = 1) {
+            let totalHpUp = 0;
+            let totalAtkUp = 0;
 
-            playerStats.maxHp += hpUp;
+            for(let i=0; i<gain; i++) {
+                playerLevel++;
+                const hpUp = Math.floor(Math.random() * 5) + 1;
+                const mpUp = Math.floor(Math.random() * 3);
+                const atkUp = Math.floor(Math.random() * 2) + 1;
+
+                playerStats.maxHp += hpUp;
+                playerStats.maxMp += mpUp;
+                playerStats.atk += atkUp;
+                
+                totalHpUp += hpUp;
+                totalAtkUp += atkUp;
+            }
             playerStats.hp = playerStats.maxHp; 
-            playerStats.maxMp += mpUp;
             playerStats.mp = playerStats.maxMp;
-            playerStats.atk += atkUp;
 
             setTimeout(() => SoundManager.playLevelUp(), 200); 
-            log(`レベルがあがった！ (HP+${hpUp}, 攻+${atkUp})`, false, 'levelup');
+            log(`レベルが${gain}あがった！ (HP+${totalHpUp}, 攻+${totalAtkUp})`, false, 'levelup');
 
             if (Math.random() < 0.3) {
                 dropItem();
             }
         }
 
-        function dropItem() {
+        function dropItem(forceRare = false) {
             let itemName = "";
-            if (Math.random() < 0.3) {
+            let isRare = false;
+
+            if (forceRare) {
+                const randIndex = Math.floor(Math.random() * rareItems.length);
+                itemName = rareItems[randIndex];
+                isRare = true;
+            } else if (Math.random() < 0.3) {
                 const maxIdx = weaponNames.length - 1;
-                const tier = Math.min(maxIdx, Math.floor((currentLevel / 13) * maxIdx));
-                const range = 15; // wide variation
+                const tier = Math.min(maxIdx, Math.floor((currentFloor / 13) * maxIdx));
+                const range = 15; 
                 const randIndex = Math.max(0, Math.min(maxIdx, tier - 5 + Math.floor(Math.random() * range)));
                 itemName = weaponNames[randIndex];
             } else {
                 itemName = itemNames[Math.floor(Math.random() * itemNames.length)];
             }
+            
             playerStats.items.push(itemName);
-            log(`${currentMonster.name}は ${itemName}を おとした！`, false, 'item');
+            const dropMsg = isRare ? `★レア！ ${itemName}を おとした！` : `${itemName}を おとした！`;
+            log(`${currentMonster.name}は ${dropMsg}`, false, 'item');
         }
 
         function handleFailure() {
@@ -1161,21 +1212,22 @@
 
         function checkHighScore() {
             let isNewRecord = false;
-            if (currentLevel > bestRecord.level) {
+            // Compare Floors now
+            if (currentFloor > bestRecord.floor) {
                 isNewRecord = true;
-            } else if (currentLevel === bestRecord.level) {
+            } else if (currentFloor === bestRecord.floor) {
                 if (playerStats.items.length > bestRecord.items.length) {
                     isNewRecord = true;
                 }
             }
             if (isNewRecord) {
                 bestRecord = {
-                    level: currentLevel,
+                    floor: currentFloor,
                     hp: playerStats.maxHp,
                     mp: playerStats.maxMp,
                     atk: playerStats.atk,
                     items: [...playerStats.items],
-                    alias: generateAlias(currentLevel, choiceStats)
+                    alias: generateAlias(currentFloor, choiceStats)
                 };
                 saveData();
                 return true;
@@ -1190,7 +1242,7 @@
             const title = document.getElementById('overlay-title');
             const kingMsg = document.getElementById('king-msg'); 
             
-            const alias = generateAlias(currentLevel, choiceStats);
+            const alias = generateAlias(currentFloor, choiceStats);
             document.getElementById('alias-val').innerText = alias;
             document.getElementById('true-fate-display').innerText = isClear ? "運命を超越した" : (predeterminedFate === 'left' ? 'はい' : 'いいえ');
             
@@ -1215,16 +1267,16 @@
                 document.getElementById('true-fate-display').parentElement.style.display = 'block';
             }
 
-            const isNew = (bestRecord.level === currentLevel && bestRecord.hp === playerStats.maxHp && bestRecord.alias === alias);
+            const isNew = (bestRecord.floor === currentFloor && bestRecord.hp === playerStats.maxHp && bestRecord.alias === alias);
             document.getElementById('new-record-badge').style.display = isNew ? 'inline-block' : 'none';
 
-            document.getElementById('res-lvl').innerText = currentLevel;
+            document.getElementById('res-floor').innerText = "B" + currentFloor + "F";
+            document.getElementById('res-lvl').innerText = playerLevel;
             document.getElementById('res-hp').innerText = playerStats.maxHp;
             document.getElementById('res-mp').innerText = playerStats.maxMp;
             document.getElementById('res-atk').innerText = playerStats.atk;
             
             document.getElementById('stat-attempts').innerText = statsRecord.totalAttempts;
-            // Update clear count display to include true clears
             const trueClearsText = statsRecord.trueClears ? ` (真:${statsRecord.trueClears})` : "";
             document.getElementById('stat-clears').innerHTML = `${statsRecord.totalClears}<small>${trueClearsText}</small>`;
             document.getElementById('stat-choices').innerText = statsRecord.totalChoices;
@@ -1260,7 +1312,8 @@
         }
 
         function resetGame() {
-            currentLevel = 0;
+            currentFloor = 0;
+            playerLevel = 1;
             choiceStats = { yes: 0, no: 0 };
             isGameClear = false;
             isTrueClear = false;
@@ -1311,19 +1364,21 @@
             if (type === 'levelup') entry.classList.add('levelup');
             if (type === 'system') entry.classList.add('system');
             if (type === 'true-boss') entry.classList.add('true-boss');
+            if (type === 'metal') entry.classList.add('metal');
             
             entry.innerHTML = msg; // innerHTML to allow tags in msg
             container.prepend(entry);
         }
 
         function updateUI() {
-            document.getElementById('level-val').innerText = currentLevel;
+            document.getElementById('floor-val').innerText = "B" + currentFloor + "F";
+            document.getElementById('level-val').innerText = playerLevel;
             document.getElementById('hp-val').innerText = playerStats.hp;
             document.getElementById('mp-val').innerText = playerStats.mp;
             document.getElementById('atk-val').innerText = playerStats.atk;
-            document.getElementById('hs-val-sm').innerText = bestRecord.level;
+            document.getElementById('hs-val-sm').innerText = "B" + bestRecord.floor + "F";
             
-            const prob = Math.pow(2, currentLevel);
+            const prob = Math.pow(2, currentFloor);
             let probStr = prob > 999999999 ? "測定不能" : prob.toLocaleString();
             document.getElementById('prob-val').innerText = probStr;
         }
@@ -1509,8 +1564,12 @@
             const raw = localStorage.getItem('abyss_rpg_save_v1');
             if(raw) {
                 bestRecord = JSON.parse(raw);
+                // Migrate old level record to floor if needed
+                if(bestRecord.level && !bestRecord.floor) {
+                    bestRecord.floor = bestRecord.level;
+                }
             } else {
-                bestRecord = { level: 0, items: [], alias: "なし" };
+                bestRecord = { floor: 0, items: [], alias: "なし" };
             }
             
             const statsRaw = localStorage.getItem('abyss_rpg_stats_v1');
