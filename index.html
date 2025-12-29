@@ -296,6 +296,7 @@
         .anim-levelup { animation: flashGreen 0.5s; }
         .anim-clear { animation: spinAndScale 1.5s forwards; }
         .anim-true-clear { animation: trueClearAnim 3s forwards; }
+        .anim-talk { animation: talkBounce 0.5s ease-in-out; }
 
         @keyframes shake { 10%, 90% { transform: translate3d(-4px, 0, 0); } 20%, 80% { transform: translate3d(6px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }
         @keyframes attack { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
@@ -307,6 +308,7 @@
             20% { transform: scale(1.5); filter: brightness(10) hue-rotate(90deg); } 
             100% { transform: scale(0); filter: brightness(0); opacity: 0; } 
         }
+        @keyframes talkBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 
         /* Message Window (Question) */
         #message-window {
@@ -506,8 +508,8 @@
         }
         .delete-btn:hover { color: var(--accent-red); }
 
-        /* Bestiary Overlay */
-        #bestiary-overlay {
+        /* Bestiary & Help Overlay */
+        .overlay-window {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: #000;
@@ -517,9 +519,9 @@
             padding: 20px;
             overflow: hidden;
         }
-        #bestiary-overlay.active { display: flex; }
+        .overlay-window.active { display: flex; }
 
-        .bestiary-header {
+        .bestiary-header, .help-header {
             font-size: 1.5rem; color: #fff; text-align: center; margin-bottom: 10px;
             border-bottom: 2px solid #fff; padding-bottom: 5px;
         }
@@ -530,7 +532,7 @@
         }
         .tab-btn.active { border-color: #fff; color: #fff; background: #222; }
 
-        .bestiary-content {
+        .bestiary-content, .help-content {
             flex: 1; overflow-y: auto; border: 1px solid #333; padding: 10px;
             font-size: 0.9rem; scrollbar-width: thin;
         }
@@ -543,9 +545,16 @@
         .collection-item.alias-item { color: #aaa; border-color: #444; width: 100%; }
         .collection-item.alias-item.unlocked { color: var(--accent-blue); border-color: var(--accent-blue); }
 
-        .close-bestiary-btn {
+        .close-btn {
             margin-top: 10px; padding: 10px; border: 1px solid #fff; background: #000; color: #fff; cursor: pointer;
         }
+
+        /* Help Content Styles */
+        .help-section { margin-bottom: 20px; }
+        .help-title { color: var(--accent-yellow); border-bottom: 1px dashed #555; margin-bottom: 5px; }
+        .help-item { display: flex; margin-bottom: 8px; }
+        .help-icon { width: 40px; text-align: center; font-weight: bold; }
+        .help-desc { flex: 1; color: #ccc; }
 
         svg { width: 100%; height: 100%; }
         .pixel-art rect { shape-rendering: crispEdges; }
@@ -560,6 +569,7 @@
             <!-- 修正: ヘッダーとして配置し、絶対配置を廃止。Flexでレイアウト管理 -->
             <div class="top-controls">
                 <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">B0F</span></div>
+                <button class="ctrl-btn" onclick="openHelp()" title="ヘルプ">？</button>
                 <button class="ctrl-btn" onclick="openBestiary()" title="図鑑を見る">📖</button>
                 <button class="ctrl-btn visual-toggle" onclick="toggleVisualMode()" id="visual-btn" title="画質切替">IMG</button>
                 <button class="ctrl-btn auto-btn" onclick="toggleAutoMode()" id="auto-btn">AUTO OFF</button>
@@ -673,7 +683,7 @@
         </div>
 
         <!-- Bestiary Overlay -->
-        <div id="bestiary-overlay">
+        <div id="bestiary-overlay" class="overlay-window">
             <div class="bestiary-header">冒険の書 (図鑑)</div>
             <div class="bestiary-tabs">
                 <button class="tab-btn active" onclick="switchBestiaryTab('items')">アイテム</button>
@@ -685,13 +695,50 @@
             <div id="bestiary-content" class="bestiary-content">
                 <!-- Content injected by JS -->
             </div>
-            <button class="close-bestiary-btn" onclick="closeBestiary()">閉じる</button>
+            <button class="close-btn" onclick="closeBestiary()">閉じる</button>
+        </div>
+        
+        <!-- Help Overlay -->
+        <div id="help-overlay" class="overlay-window">
+            <div class="help-header">あそびかた</div>
+            <div class="help-content">
+                <div class="help-section">
+                    <div class="help-title">ルール</div>
+                    <p style="color:#ddd; line-height:1.6;">
+                        運命の二択を選び、13の試練を突破せよ。<br>
+                        正解ならば先へ進み、強くなる。<br>
+                        不正解ならば即死。<br>
+                        最深部の魔王を倒すことが目的だ。<br>
+                        <span style="color:#aaa; font-size:0.8em;">※低確率で「真の魔王」が現れることもあるらしい…？</span>
+                    </p>
+                </div>
+                <div class="help-section">
+                    <div class="help-title">ボタンせつめい</div>
+                    <div class="help-item">
+                        <div class="help-icon">IMG</div>
+                        <div class="help-desc">ドット絵(DOT)と画像モード(IMG)を切り替える。画像がない場合はドット絵が表示される。</div>
+                    </div>
+                    <div class="help-item">
+                        <div class="help-icon">AUTO</div>
+                        <div class="help-desc">自動で選択肢を選んで進むモード。ハイスコア到達時やクリア時に自動停止する。</div>
+                    </div>
+                    <div class="help-item">
+                        <div class="help-icon">📖</div>
+                        <div class="help-desc">獲得したアイテムや称号の図鑑を見る。</div>
+                    </div>
+                    <div class="help-item">
+                        <div class="help-icon">🔊</div>
+                        <div class="help-desc">サウンドのON/OFFを切り替える。</div>
+                    </div>
+                </div>
+            </div>
+            <button class="close-btn" onclick="closeHelp()">閉じる</button>
         </div>
     </div>
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 14.0 (Split Level & Metal Slime)
+         * QUEST of DUALISM - Ver 16.0 (Ending Messages)
          */
 
         // Game State
@@ -951,6 +998,14 @@
             makeChoice(choice);
         }
 
+        // --- Help & Bestiary Control ---
+        function openHelp() {
+            document.getElementById('help-overlay').classList.add('active');
+        }
+        function closeHelp() {
+            document.getElementById('help-overlay').classList.remove('active');
+        }
+
         // --- Core Game Logic ---
 
         function startLevel(lvl) {
@@ -1084,6 +1139,13 @@
                     statsRecord.trueClears = (statsRecord.trueClears || 0) + 1;
                     isTrueClear = true;
                 }
+                
+                // 真・魔王未討伐時の通常魔王撃破時演出
+                if (currentMonster.id === 'demon' && statsRecord.trueClears === 0) {
+                     setTimeout(showDemonLastWords, 1000);
+                     return; 
+                }
+
                 statsRecord.totalClears++; 
                 saveData();
                 setTimeout(() => {
@@ -1106,6 +1168,31 @@
                 }, nextDelay);
             }
         }
+        
+        function showDemonLastWords() {
+            const msgWin = document.getElementById('message-window');
+            const vis = document.getElementById('monster-visual');
+            
+            // 演出開始
+            vis.classList.add('anim-talk');
+            msgWin.innerHTML = `${currentMonster.name}「グフッ……　わたしをたおすとは……」`;
+            
+            setTimeout(() => {
+                vis.classList.add('anim-talk');
+                msgWin.innerHTML = `${currentMonster.name}「だが　しんのきょうふは　これからだ……」`;
+                
+                setTimeout(() => {
+                    vis.classList.add('anim-talk');
+                    msgWin.innerHTML = `${currentMonster.name}「このせかいには　まだ　あいつが　いる……」`;
+                    
+                    setTimeout(() => {
+                        statsRecord.totalClears++; 
+                        saveData();
+                        showGameClear();
+                    }, 2500);
+                }, 2500);
+            }, 2500);
+        }
 
         function levelUp(gain = 1) {
             let totalHpUp = 0;
@@ -1118,7 +1205,9 @@
                 const atkUp = Math.floor(Math.random() * 2) + 1;
 
                 playerStats.maxHp += hpUp;
+                playerStats.hp = playerStats.maxHp; 
                 playerStats.maxMp += mpUp;
+                playerStats.mp = playerStats.maxMp;
                 playerStats.atk += atkUp;
                 
                 totalHpUp += hpUp;
@@ -1252,18 +1341,21 @@
             overlay.classList.remove('clear-mode', 'true-clear-mode');
 
             if (isClear) {
-                title.innerText = "GAME CLEAR!!";
-                kingMsg.innerText = ""; 
+                // ドラゴンクエスト風テキストに変更
                 document.getElementById('true-fate-display').parentElement.style.display = 'none';
+                
                 if (isTrueClear) {
                     overlay.classList.add('true-clear-mode');
-                    title.innerText = "TRUE ENDING";
+                    title.innerText = "しんの　へいわが　おとずれた！";
+                    kingMsg.innerHTML = "みごとだ！　すべての　げんきょうを　うちたおすとは！<br>そなたこそ　まことの　ゆうしゃだ！";
                 } else {
                     overlay.classList.add('clear-mode');
+                    title.innerText = "せかいに　へいわが　もどった！";
+                    kingMsg.innerHTML = "よくぞ　まおうを　たおした！<br>そなたの　かつやくは　えいえんに　かたりつがれるだろう！";
                 }
             } else {
-                title.innerText = "全滅した...";
-                kingMsg.innerText = "しんでしまうとは なさけない..."; 
+                title.innerText = "ぜんめつ　した……";
+                kingMsg.innerText = "しんでしまうとは なさけない……"; 
                 document.getElementById('true-fate-display').parentElement.style.display = 'block';
             }
 
