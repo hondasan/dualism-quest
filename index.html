@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport修正: 拡大縮小を禁止し、アプリライクな挙動に固定 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QUEST of DUALISM -運命の二択と13の試練-</title>
     <style>
@@ -40,6 +39,18 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            transition: background 0.5s;
+        }
+        
+        /* True Demon Mode Body Style */
+        body.true-demon-mode {
+            background: radial-gradient(circle, #200 0%, #000 90%);
+            animation: bg-pulse 2s infinite;
+        }
+        @keyframes bg-pulse {
+            0% { box-shadow: inset 0 0 0 #000; }
+            50% { box-shadow: inset 0 0 50px #500; }
+            100% { box-shadow: inset 0 0 0 #000; }
         }
 
         /* Layout Structure */
@@ -53,6 +64,12 @@
             position: relative;
             z-index: 10;
             overflow: hidden;
+        }
+        
+        /* Container in True Demon Mode */
+        .true-demon-mode #app-container {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 20px var(--accent-red);
         }
         
         @media (min-width: 769px) {
@@ -117,6 +134,7 @@
         .log-entry.item { color: var(--accent-yellow); }
         .log-entry.levelup { color: var(--accent-green); }
         .log-entry.system { color: #888; }
+        .log-entry.true-boss { color: #f0f; font-weight: bold; text-shadow: 0 0 5px #f00; }
 
         /* Main Game Area */
         #game-area {
@@ -243,6 +261,20 @@
             object-fit: contain;
             image-rendering: pixelated; 
         }
+        
+        /* True Demon Glitch Effect */
+        .true-demon-visual {
+            animation: glitch-anim 0.2s infinite;
+            filter: drop-shadow(0 0 10px #f0f) drop-shadow(2px 2px #f00);
+        }
+        @keyframes glitch-anim {
+            0% { transform: translate(0) scale(1); }
+            20% { transform: translate(-2px, 2px) scale(1.02); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px) scale(0.98); }
+            100% { transform: translate(0) scale(1); }
+        }
 
         /* Animation Classes */
         .anim-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
@@ -250,12 +282,18 @@
         .anim-damage { animation: flashRed 0.5s; }
         .anim-levelup { animation: flashGreen 0.5s; }
         .anim-clear { animation: spinAndScale 1.5s forwards; }
+        .anim-true-clear { animation: trueClearAnim 3s forwards; }
 
         @keyframes shake { 10%, 90% { transform: translate3d(-4px, 0, 0); } 20%, 80% { transform: translate3d(6px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-8px, 0, 0); } 40%, 60% { transform: translate3d(8px, 0, 0); } }
         @keyframes attack { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
         @keyframes flashRed { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 10px red) sepia(100%) hue-rotate(-50deg) saturate(600%); } }
         @keyframes flashGreen { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 10px #4caf50) brightness(1.5); } }
         @keyframes spinAndScale { 0% { transform: scale(1) rotate(0deg); opacity: 1; } 50% { transform: scale(1.2) rotate(180deg); opacity: 1; filter: invert(1); } 100% { transform: scale(0) rotate(360deg); opacity: 0; } }
+        @keyframes trueClearAnim { 
+            0% { transform: scale(1); filter: brightness(1); } 
+            20% { transform: scale(1.5); filter: brightness(10) hue-rotate(90deg); } 
+            100% { transform: scale(0); filter: brightness(0); opacity: 0; } 
+        }
 
         /* Message Window (Question) */
         #message-window {
@@ -270,6 +308,11 @@
             background: #000;
             display: flex;
             align-items: center; /* 縦中央揃え */
+        }
+        
+        .true-demon-mode #message-window {
+            border-color: var(--accent-red);
+            color: #fdd;
         }
 
         /* Command Window */
@@ -344,6 +387,17 @@
             border-bottom-color: var(--accent-yellow);
             text-shadow: 0 0 10px var(--accent-yellow);
             font-size: 2.5rem;
+        }
+        
+        #overlay.true-clear-mode {
+            background: linear-gradient(135deg, #200 0%, #000 100%);
+            border: 4px double #f0f;
+        }
+        #overlay.true-clear-mode .game-over-title {
+            color: #f0f;
+            border-bottom-color: #f0f;
+            text-shadow: 0 0 20px #f0f;
+            font-size: 3rem;
         }
 
         .game-over-title { 
@@ -622,14 +676,14 @@
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 12.0 (Responsive Fix)
+         * QUEST of DUALISM - Ver 13.0 (True Demon Update)
          */
 
         // Game State
         let currentLevel = 0;
         let bestRecord = { level: 0, items: [], alias: "なし" }; 
         let statsRecord = { 
-            totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0,
+            totalAttempts: 0, totalClears: 0, trueClears: 0, totalChoices: 0, totalSuccesses: 0,
             collectedItems: [], collectedAliases: [] 
         }; 
         let gameSettings = { isPixelMode: true }; 
@@ -638,6 +692,7 @@
         let choiceStats = { yes: 0, no: 0 };
         let currentMonster = null;
         let isGameClear = false;
+        let isTrueClear = false;
         let isProcessing = false;
         
         // Auto Mode
@@ -700,12 +755,19 @@
             playDamage: function() { this.init(); this.playTone(150, 'sawtooth', 0.3, 0, 0.2); this.playTone(100, 'sawtooth', 0.3, 0.1, 0.2); },
             playLevelUp: function() { this.init(); const t = 0.08; this.playTone(523.25, 'square', 0.2, 0); this.playTone(659.25, 'square', 0.2, t); this.playTone(783.99, 'square', 0.2, t*2); this.playTone(1046.50, 'square', 0.4, t*3); },
             playClear: function() { this.init(); const t = 0.12; const v = 0.15; const notes = [523.25, 659.25, 783.99, 1046.50, 0, 783.99, 1046.50]; notes.forEach((freq, i) => { if(freq > 0) this.playTone(freq, 'square', 0.3, i * t, v); }); },
-            playGameOver: function() { this.init(); this.playTone(300, 'triangle', 0.5, 0, 0.2); this.playTone(250, 'triangle', 0.5, 0.4, 0.2); this.playTone(200, 'triangle', 1.0, 0.8, 0.2); }
+            playGameOver: function() { this.init(); this.playTone(300, 'triangle', 0.5, 0, 0.2); this.playTone(250, 'triangle', 0.5, 0.4, 0.2); this.playTone(200, 'triangle', 1.0, 0.8, 0.2); },
+            playTrueClear: function() { 
+                this.init(); 
+                // Crazy Arpeggio
+                const base = 220; 
+                for(let i=0; i<30; i++) {
+                    const freq = base * (1 + Math.random()*4);
+                    this.playTone(freq, 'sawtooth', 0.1, i*0.05, 0.1);
+                }
+            }
         };
 
         // --- Data Lists ---
-        
-        // 90+ Weapons
         const weaponNames = [
             "ひのきのぼう", "こんぼう", "どうのつるぎ", "てつのやり", 
             "はがねのつるぎ", "まどうしのつえ", "パルチザン", "はじゃのつるぎ", 
@@ -730,7 +792,6 @@
             "隕石", "ブラックホール", "ビッグバン", "超新星", "銀河", "宇宙", "虚無", "希望", "絶望", "愛"
         ];
         
-        // 80+ Items
         const itemNames = [
             "やくそう", "どくけしそう", "せいすい", "ちからのたね", "まもりのたね", "すばやさのたね", "いのちのきのみ", "ふしぎなきのみ", "エルフののみぐすり", "せかいじゅのは",
             "けんじゃのいし", "エリクサー", "ラストエリクサー", "おにぎり", "サンドイッチ", "ポーション", "ハイポーション", "フェニックスの尾", "きんののべぼう", "ガラクタ",
@@ -744,7 +805,6 @@
 
         const allItemsList = [...weaponNames, ...itemNames].sort();
 
-        // Monster Definitions
         const monsterDefs = {
             slime: { id: "slime", name: "スライム", color: "#4488ff", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] },
             goblin: { id: "goblin", name: "ゴブリン", color: "#4caf50", pixels: [{x:4,y:3,w:8,h:5}, {x:2,y:4,w:2,h:3}, {x:12,y:4,w:2,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:4,h:1,c:"#000"}, {x:4,y:8,w:8,h:6}, {x:2,y:9,w:2,h:3}, {x:12,y:9,w:2,h:3}] },
@@ -756,7 +816,9 @@
             chimera: { id: "chimera", name: "キメラ", color: "#e91e63", pixels: [{x:6,y:2,w:4,h:4}, {x:4,y:6,w:8,h:5}, {x:1,y:4,w:3,h:6}, {x:12,y:4,w:3,h:6}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:5,y:11,w:2,h:3}, {x:9,y:11,w:2,h:3}] },
             dragon: { id: "dragon", name: "ドラゴン", color: "#44ff44", pixels: [{x:2,y:8,w:12,h:6}, {x:4,y:4,w:4,h:4}, {x:3,y:3,w:1,h:2}, {x:8,y:3,w:1,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:0,y:7,w:3,h:3}, {x:12,y:6,w:4,h:3}, {x:3,y:10,w:10,h:3,c:"#ffffaa"}] },
             reaper: { id: "reaper", name: "しにがみ", color: "#607d8b", pixels: [{x:6,y:2,w:4,h:4}, {x:5,y:6,w:6,h:8}, {x:12,y:3,w:1,h:10,c:"#aaa"}, {x:11,y:3,w:3,h:1,c:"#aaa"}, {x:4,y:8,w:8,h:0}, {x:7,y:3,w:1,h:1,c:"#000"}, {x:8,y:3,w:1,h:1,c:"#000"}, {x:3,y:6,w:2,h:6, c:"#444"}] },
-            demon: { id: "demon", name: "まおう", color: "#8800ff", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}] }
+            demon: { id: "demon", name: "まおう", color: "#8800ff", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}] },
+            // True Demon added
+            true_demon: { id: "true_demon", name: "真・魔王", color: "#000", pixels: [{x:6,y:1,w:4,h:2}, {x:4,y:3,w:8,h:9}, {x:2,y:4,w:2,h:6}, {x:12,y:4,w:2,h:6}, {x:6,y:5,w:1,h:2,c:"#f00"}, {x:9,y:5,w:1,h:2,c:"#f00"}, {x:0,y:2,w:2,h:8}, {x:14,y:2,w:2,h:8}, {x:7,y:0,w:2,h:1,c:"#ffd700"}] }
         };
 
         const monsters = [
@@ -842,6 +904,15 @@
             const overlay = document.getElementById('overlay');
             if(overlay.classList.contains('active')) return;
 
+            // 追加: 最終ステージ(Lv13)なら強制停止
+            if (currentLevel === 13) {
+                isAutoMode = false;
+                document.getElementById('auto-btn').innerText = "AUTO OFF";
+                document.getElementById('auto-btn').classList.remove('active');
+                log("★最終決戦！ オートモードを かいじょしました。", false, 'system');
+                return;
+            }
+
             if(bestRecord.level > 0 && currentLevel === bestRecord.level) {
                 isAutoMode = false;
                 document.getElementById('auto-btn').innerText = "AUTO OFF";
@@ -890,7 +961,13 @@
 
         function spawnMonster() {
             const idx = currentLevel - 1;
-            if (idx < monsters.length) {
+            
+            // True Demon Chance at Level 13
+            if (currentLevel === 13 && Math.random() < 0.1) {
+                currentMonster = Object.assign({}, monsterDefs.true_demon);
+                document.body.classList.add('true-demon-mode');
+                log("！！！　しんの　まおうが　あらわれた　！！！", false, 'true-boss');
+            } else if (idx < monsters.length) {
                 currentMonster = monsters[idx];
             } else {
                 currentMonster = monsters[monsters.length - 1];
@@ -903,6 +980,10 @@
             const container = document.getElementById('monster-visual');
             container.innerHTML = '';
             container.className = ''; 
+            
+            if(monster.id === 'true_demon') {
+                container.className = 'true-demon-visual';
+            }
 
             if (gameSettings.isPixelMode) {
                 container.innerHTML = generateMonsterSVG(monster);
@@ -965,6 +1046,10 @@
             const nextDelay = isAutoMode ? 400 : 800; 
 
             if (currentLevel === 13) {
+                if (currentMonster.id === 'true_demon') {
+                    statsRecord.trueClears = (statsRecord.trueClears || 0) + 1;
+                    isTrueClear = true;
+                }
                 statsRecord.totalClears++; 
                 saveData();
                 setTimeout(() => {
@@ -1010,12 +1095,7 @@
         function dropItem() {
             let itemName = "";
             if (Math.random() < 0.3) {
-                // Rare Weapons
-                // Logic: higher chance for cool weapons as level increases
-                // Use a wider range of the massive list
                 const maxIdx = weaponNames.length - 1;
-                // tier based on level (max level 13 -> tier around 6-7, but we want full range)
-                // Normalize level 1-13 to index 0-90
                 const tier = Math.min(maxIdx, Math.floor((currentLevel / 13) * maxIdx));
                 const range = 15; // wide variation
                 const randIndex = Math.max(0, Math.min(maxIdx, tier - 5 + Math.floor(Math.random() * range)));
@@ -1047,7 +1127,11 @@
         }
 
         function showGameClear() {
-            SoundManager.playClear(); 
+            if (isTrueClear) {
+                SoundManager.playTrueClear();
+            } else {
+                SoundManager.playClear(); 
+            }
 
             isGameClear = true;
             
@@ -1059,9 +1143,14 @@
             }
 
             const vis = document.getElementById('monster-visual');
-            vis.classList.add('anim-clear');
+            if (isTrueClear) {
+                vis.classList.add('anim-true-clear');
+            } else {
+                vis.classList.add('anim-clear');
+            }
             
-            log(`おめでとう！ まおうを たおした！`, false, 'success');
+            const demonName = isTrueClear ? "真・魔王" : "まおう";
+            log(`おめでとう！ ${demonName}を たおした！`, false, 'success');
             
             checkHighScore(); 
 
@@ -1108,13 +1197,19 @@
             // Add to Collections
             addToCollection(playerStats.items, alias);
 
+            overlay.classList.remove('clear-mode', 'true-clear-mode');
+
             if (isClear) {
-                overlay.classList.add('clear-mode');
                 title.innerText = "GAME CLEAR!!";
                 kingMsg.innerText = ""; 
                 document.getElementById('true-fate-display').parentElement.style.display = 'none';
+                if (isTrueClear) {
+                    overlay.classList.add('true-clear-mode');
+                    title.innerText = "TRUE ENDING";
+                } else {
+                    overlay.classList.add('clear-mode');
+                }
             } else {
-                overlay.classList.remove('clear-mode');
                 title.innerText = "全滅した...";
                 kingMsg.innerText = "しんでしまうとは なさけない..."; 
                 document.getElementById('true-fate-display').parentElement.style.display = 'block';
@@ -1129,7 +1224,9 @@
             document.getElementById('res-atk').innerText = playerStats.atk;
             
             document.getElementById('stat-attempts').innerText = statsRecord.totalAttempts;
-            document.getElementById('stat-clears').innerText = statsRecord.totalClears;
+            // Update clear count display to include true clears
+            const trueClearsText = statsRecord.trueClears ? ` (真:${statsRecord.trueClears})` : "";
+            document.getElementById('stat-clears').innerHTML = `${statsRecord.totalClears}<small>${trueClearsText}</small>`;
             document.getElementById('stat-choices').innerText = statsRecord.totalChoices;
             
             let rate = 0;
@@ -1166,6 +1263,8 @@
             currentLevel = 0;
             choiceStats = { yes: 0, no: 0 };
             isGameClear = false;
+            isTrueClear = false;
+            document.body.classList.remove('true-demon-mode');
             
             playerStats = {
                 hp: 20, maxHp: 20,
@@ -1211,8 +1310,9 @@
             if (type === 'item') entry.classList.add('item');
             if (type === 'levelup') entry.classList.add('levelup');
             if (type === 'system') entry.classList.add('system');
+            if (type === 'true-boss') entry.classList.add('true-boss');
             
-            entry.innerText = msg;
+            entry.innerHTML = msg; // innerHTML to allow tags in msg
             container.prepend(entry);
         }
 
@@ -1293,6 +1393,7 @@
             suffix = suffixPool[Math.floor(Math.random() * suffixPool.length)];
 
             // Special Overrides (Fixed Titles for specific feats)
+            if (isTrueClear) return "因果律の破壊者";
             if (lvl === 13) return "運命の超越者";
             if (lvl === 7 && yesRatio === 1.0) return "ラッキーセブン";
             if (lvl > 10 && playerStats.items.includes("ねぎ")) return "ねぎの使い手";
@@ -1418,13 +1519,14 @@
                 statsRecord = {
                     totalAttempts: loaded.totalAttempts || 0,
                     totalClears: loaded.totalClears || 0,
+                    trueClears: loaded.trueClears || 0, // Load true clears
                     totalChoices: loaded.totalChoices || 0,
                     totalSuccesses: loaded.totalSuccesses || 0,
                     collectedItems: loaded.collectedItems || [],
                     collectedAliases: loaded.collectedAliases || []
                 };
             } else {
-                statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0, collectedItems: [], collectedAliases: [] };
+                statsRecord = { totalAttempts: 0, totalClears: 0, trueClears: 0, totalChoices: 0, totalSuccesses: 0, collectedItems: [], collectedAliases: [] };
             }
             
             loadSettings(); 
