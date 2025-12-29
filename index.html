@@ -176,20 +176,30 @@
             background: #000; padding: 0 5px;
         }
         
-        .sound-toggle {
+        .ctrl-btn {
             background: transparent;
             border: 1px solid #555;
             color: #fff;
             font-size: 0.8rem;
             cursor: pointer;
-            width: 30px;
             height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 50%;
+            padding: 0 10px;
+            border-radius: 4px;
+            font-family: var(--font-main);
         }
-        .sound-toggle:hover { border-color: #fff; }
+        .ctrl-btn:hover { border-color: #fff; }
+        
+        .auto-btn.active {
+            background: var(--accent-blue);
+            color: #000;
+            border-color: var(--accent-blue);
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
 
         /* Monster Area */
         #monster-container {
@@ -212,12 +222,11 @@
             align-items: center;
         }
         
-        /* CSS for inserted images */
         #monster-visual img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            image-rendering: pixelated; /* Keeps retro look for images */
+            image-rendering: pixelated; 
         }
 
         /* Animation Classes */
@@ -275,6 +284,7 @@
             padding: 5px;
             position: relative;
         }
+        .choice-btn:disabled { color: #555; pointer-events: none; }
 
         .choice-btn:hover::before {
             content: "▶";
@@ -422,7 +432,8 @@
         <section id="game-area">
             <div class="top-controls">
                 <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">0</span></div>
-                <button class="sound-toggle" onclick="SoundManager.toggleMute()" title="サウンドON/OFF">🔊</button>
+                <button class="ctrl-btn auto-btn" onclick="toggleAutoMode()" id="auto-btn">AUTO OFF</button>
+                <button class="ctrl-btn sound-toggle" onclick="SoundManager.toggleMute()" title="サウンドON/OFF">🔊</button>
             </div>
             
             <!-- Status -->
@@ -453,8 +464,8 @@
             <!-- Command -->
             <div class="command-window">
                 <div class="choices-container">
-                    <button class="choice-btn" onclick="makeChoice('left')">はい</button>
-                    <button class="choice-btn" onclick="makeChoice('right')">いいえ</button>
+                    <button class="choice-btn" id="btn-yes" onclick="makeChoice('left')">はい</button>
+                    <button class="choice-btn" id="btn-no" onclick="makeChoice('right')">いいえ</button>
                 </div>
             </div>
         </section>
@@ -508,7 +519,7 @@
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 5.1 (Image Hybrid)
+         * QUEST of DUALISM - Ver 6.0 (Auto Mode)
          */
 
         // Game State
@@ -519,6 +530,11 @@
         let choiceStats = { yes: 0, no: 0 };
         let currentMonster = null;
         let isGameClear = false;
+        let isProcessing = false; // Block inputs during animation
+        
+        // Auto Mode
+        let isAutoMode = false;
+        let autoTimeout = null;
         
         // Player Stats
         let playerStats = {
@@ -641,6 +657,53 @@
             startLevel(1);
         };
 
+        // --- Auto Mode Control ---
+        function toggleAutoMode() {
+            isAutoMode = !isAutoMode;
+            const btn = document.getElementById('auto-btn');
+            
+            if(isAutoMode) {
+                btn.innerText = "AUTO ON";
+                btn.classList.add('active');
+                SoundManager.init(); // Ensure audio context on click
+                processAutoTurn();
+            } else {
+                btn.innerText = "AUTO OFF";
+                btn.classList.remove('active');
+                if(autoTimeout) clearTimeout(autoTimeout);
+            }
+        }
+
+        function processAutoTurn() {
+            if(!isAutoMode || isProcessing) return;
+
+            // Stop if game over screen is showing, handle reset there
+            const overlay = document.getElementById('overlay');
+            if(overlay.classList.contains('active')) return;
+
+            // STOP Condition: Reached High Score level (Chance to beat it)
+            // If bestRecord.level is 0 (new game), don't stop.
+            // If currentLevel matches bestRecord.level, stop to let user play.
+            if(bestRecord.level > 0 && currentLevel === bestRecord.level) {
+                isAutoMode = false;
+                document.getElementById('auto-btn').innerText = "AUTO OFF";
+                document.getElementById('auto-btn').classList.remove('active');
+                log("★ハイスコアとうたつ！ オートモードを かいじょしました。", false, 'system');
+                return;
+            }
+
+            // Execute Turn
+            const choice = Math.random() < 0.5 ? 'left' : 'right';
+            
+            // Highlight button briefly
+            const btnId = choice === 'left' ? 'btn-yes' : 'btn-no';
+            const btn = document.getElementById(btnId);
+            btn.style.color = '#ffff00';
+            setTimeout(() => btn.style.color = '#fff', 100);
+
+            makeChoice(choice);
+        }
+
         // --- Core Game Logic ---
 
         function startLevel(lvl) {
@@ -648,6 +711,7 @@
             determineFate();
             spawnMonster();
             updateUI();
+            isProcessing = false;
             
             if(lvl === 1) {
                 statsRecord.totalAttempts++;
@@ -655,6 +719,11 @@
                 
                 log(`[Lv${lvl}] ${currentMonster.name}が あらわれた！`);
                 document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
+                
+                // Auto Mode Trigger for Start
+                if(isAutoMode) {
+                    autoTimeout = setTimeout(processAutoTurn, 500);
+                }
             }
         }
 
@@ -680,13 +749,11 @@
             container.innerHTML = '';
             container.className = ''; 
 
-            // Try loading Image first
             const imgPath = `img/${monster.id}.png`;
             const img = document.createElement('img');
             img.src = imgPath;
             img.alt = monster.name;
             
-            // Fallback to SVG if image not found
             img.onerror = function() {
                 this.remove();
                 container.innerHTML = generateMonsterSVG(monster);
@@ -700,6 +767,8 @@
         }
 
         function makeChoice(choice) {
+            if(isProcessing) return; // Prevent spam
+            isProcessing = true;
             SoundManager.init();
 
             if (choice === 'left') choiceStats.yes++;
@@ -727,6 +796,8 @@
 
             levelUp();
 
+            const nextDelay = isAutoMode ? 400 : 800; // Faster in Auto
+
             if (currentLevel === 13) {
                 statsRecord.totalClears++; 
                 saveData();
@@ -742,7 +813,12 @@
                     log(`[Lv${currentLevel}] ${currentMonster.name}が あらわれた！`);
                     document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
                     updateUI();
-                }, 800);
+                    
+                    isProcessing = false;
+                    if(isAutoMode) {
+                        autoTimeout = setTimeout(processAutoTurn, 400);
+                    }
+                }, nextDelay);
             }
         }
 
@@ -791,15 +867,25 @@
 
             checkHighScore(); 
 
+            const failDelay = isAutoMode ? 500 : 1000;
             setTimeout(() => {
                 showGameOver(false);
-            }, 1000);
+            }, failDelay);
         }
 
         function showGameClear() {
             SoundManager.playClear(); 
 
             isGameClear = true;
+            
+            // Auto Mode stops on Clear
+            if(isAutoMode) {
+                isAutoMode = false;
+                document.getElementById('auto-btn').classList.remove('active');
+                document.getElementById('auto-btn').innerText = "AUTO OFF";
+                log("★ゲームクリア！ オートモードを かいじょしました。", false, 'system');
+            }
+
             const vis = document.getElementById('monster-visual');
             vis.classList.add('anim-clear');
             
@@ -884,6 +970,14 @@
             }
 
             overlay.classList.add('active');
+            document.querySelector('.choices-container').querySelectorAll('button').forEach(b => b.disabled = true);
+
+            // Auto Retry
+            if(isAutoMode && !isGameClear) {
+                autoTimeout = setTimeout(() => {
+                    resetGame();
+                }, 1000);
+            }
         }
 
         function resetGame() {
@@ -901,6 +995,7 @@
             document.getElementById('overlay').classList.remove('active');
             document.getElementById('overlay').classList.remove('clear-mode');
             document.getElementById('log-container').innerHTML = '';
+            document.querySelector('.choices-container').querySelectorAll('button').forEach(b => b.disabled = false);
             log("ぼうけんの きろくを リセットしました。");
             
             startLevel(1);
@@ -932,6 +1027,7 @@
             if (type === 'success') entry.classList.add('success');
             if (type === 'item') entry.classList.add('item');
             if (type === 'levelup') entry.classList.add('levelup');
+            if (type === 'system') entry.classList.add('system');
             
             entry.innerText = msg;
             container.prepend(entry);
