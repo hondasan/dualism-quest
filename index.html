@@ -428,6 +428,47 @@
         }
         .delete-btn:hover { color: var(--accent-red); }
 
+        /* Bestiary Overlay */
+        #bestiary-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 60;
+            display: none;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden;
+        }
+        #bestiary-overlay.active { display: flex; }
+
+        .bestiary-header {
+            font-size: 1.5rem; color: #fff; text-align: center; margin-bottom: 10px;
+            border-bottom: 2px solid #fff; padding-bottom: 5px;
+        }
+        
+        .bestiary-tabs { display: flex; gap: 10px; margin-bottom: 10px; justify-content: center; }
+        .tab-btn {
+            background: #000; border: 1px solid #555; color: #aaa; padding: 5px 15px; cursor: pointer;
+        }
+        .tab-btn.active { border-color: #fff; color: #fff; background: #222; }
+
+        .bestiary-content {
+            flex: 1; overflow-y: auto; border: 1px solid #333; padding: 10px;
+            font-size: 0.9rem; scrollbar-width: thin;
+        }
+        
+        .collection-list { display: flex; flex-wrap: wrap; gap: 5px; }
+        .collection-item {
+            padding: 3px 8px; border: 1px solid #333; color: #888;
+        }
+        .collection-item.unlocked { color: var(--accent-yellow); border-color: var(--accent-yellow); }
+        .collection-item.alias-item { color: #aaa; border-color: #444; width: 100%; }
+        .collection-item.alias-item.unlocked { color: var(--accent-blue); border-color: var(--accent-blue); }
+
+        .close-bestiary-btn {
+            margin-top: 10px; padding: 10px; border: 1px solid #fff; background: #000; color: #fff; cursor: pointer;
+        }
+
         svg { width: 100%; height: 100%; }
         .pixel-art rect { shape-rendering: crispEdges; }
 
@@ -448,6 +489,7 @@
         <section id="game-area">
             <div class="top-controls">
                 <div class="highscore-display">HI-SCORE: <span id="hs-val-sm">0</span></div>
+                <button class="ctrl-btn" onclick="openBestiary()" title="図鑑を見る">📖</button>
                 <button class="ctrl-btn visual-toggle" onclick="toggleVisualMode()" id="visual-btn" title="画質切替">IMG</button>
                 <button class="ctrl-btn auto-btn" onclick="toggleAutoMode()" id="auto-btn">AUTO OFF</button>
                 <button class="ctrl-btn sound-toggle" onclick="SoundManager.toggleMute()" title="サウンドON/OFF">🔊</button>
@@ -543,30 +585,48 @@
                 </div>
             </div>
 
+            <button class="restart-btn" onclick="openBestiary()">📖 図鑑を見る</button>
             <button class="restart-btn" onclick="resetGame()">さいしょから</button>
             <br>
             <button class="delete-btn" onclick="clearData()">きろくを まっしょう する</button>
+        </div>
+
+        <!-- Bestiary Overlay -->
+        <div id="bestiary-overlay">
+            <div class="bestiary-header">冒険の書 (図鑑)</div>
+            <div class="bestiary-tabs">
+                <button class="tab-btn active" onclick="switchBestiaryTab('items')">アイテム</button>
+                <button class="tab-btn" onclick="switchBestiaryTab('aliases')">称号</button>
+            </div>
+            <div style="text-align:right; font-size:0.8rem; margin-bottom:5px; color:#aaa;">
+                収集率: <span id="collection-rate">0%</span>
+            </div>
+            <div id="bestiary-content" class="bestiary-content">
+                <!-- Content injected by JS -->
+            </div>
+            <button class="close-bestiary-btn" onclick="closeBestiary()">閉じる</button>
         </div>
     </div>
 
     <script>
         /**
-         * QUEST of DUALISM - Ver 8.0 (Detailed Statistics)
+         * QUEST of DUALISM - Ver 10.0 (Massive Data Expansion)
          */
 
         // Game State
         let currentLevel = 0;
         let bestRecord = { level: 0, items: [], alias: "なし" }; 
-        // 統計データの拡張: 選択数と成功数を追加
-        let statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0 }; 
-        // Settings State
+        let statsRecord = { 
+            totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0,
+            collectedItems: [], collectedAliases: [] 
+        }; 
         let gameSettings = { isPixelMode: false };
         
         let predeterminedFate = null; 
         let choiceStats = { yes: 0, no: 0 };
         let currentMonster = null;
         let isGameClear = false;
-        let isProcessing = false; // Block inputs during animation
+        let isProcessing = false;
         
         // Auto Mode
         let isAutoMode = false;
@@ -631,11 +691,37 @@
             playGameOver: function() { this.init(); this.playTone(300, 'triangle', 0.5, 0, 0.2); this.playTone(250, 'triangle', 0.5, 0.4, 0.2); this.playTone(200, 'triangle', 1.0, 0.8, 0.2); }
         };
 
-        // Item Database
-        const weaponNames = ["ひのきのぼう", "こんぼう", "どうのつるぎ", "てつのやり", "はがねのつるぎ", "まどうしのつえ", "パルチザン", "はじゃのつるぎ", "ほのおのつるぎ", "こおりのやいば", "ドラゴンキラー", "あくまのオノ", "らいじんのけん", "ひかりのつるぎ", "ゆうしゃのつるぎ", "でんせつのぶき"];
-        const itemNames = ["やくそう", "どくけしそう", "せいすい", "ちからのたね", "まもりのたね", "すばやさのたね", "いのちのきのみ", "ふしぎなきのみ", "エルフののみぐすり", "せかいじゅのは"];
+        // --- Data Lists (Massive Expansion) ---
+        
+        // 90 Weapons
+        const weaponNames = [
+            "ひのきのぼう", "こんぼう", "どうのつるぎ", "てつのやり", "はがねのつるぎ", "まどうしのつえ", "パルチザン", "はじゃのつるぎ", "ほのおのつるぎ", "こおりのやいば", 
+            "ドラゴンキラー", "あくまのオノ", "らいじんのけん", "ひかりのつるぎ", "ゆうしゃのつるぎ", "でんせつのぶき", "エクスカリバー", "ラグナロク", "グングニル", "ムラマサ", 
+            "ロンギヌス", "ゲイボルグ", "クサナギ", "竹槍", "フライパン", "ハリセン", "ピコピコハンマー", "ビームサーベル", "ねぎ", "イージスのたて",
+            "錆びた短剣", "ガラスの剣", "ボーンクラブ", "ミスリルソード", "オリハルコンダガー", "魔剣グラム", "聖剣デュランダル", "神槍ブリューナク", "方天画戟", "青龍刀",
+            "ヌンチャク", "ブーメラン", "ヨーヨー", "タロットカード", "水晶玉", "辞書", "定規", "モップ", "チェーンソー", "冷凍マグロ",
+            "光線銃", "ロケットランチャー", "手榴弾", "モーニングスター", "バトルアックス", "ウォーハンマー", "ランス", "ハルバード", "トライデント", "クロスボウ",
+            "ショートボウ", "ロングボウ", "アーバレスト", "くない", "手裏剣", "まきびし", "忍者刀", "くない", "十手", "鎖鎌",
+            "バールのようなもの", "金属バット", "スコップ", "ツルハシ", "ノコギリ", "かなづち", "ドライバー", "スパナ", "パイプレンチ", "ドリル",
+            "ギター", "マイク", "ドラムスティック", "指揮棒", "筆", "万年筆", "そろばん", "電卓", "スマホ", "タブレット"
+        ];
+        
+        // 80 Items
+        const itemNames = [
+            "やくそう", "どくけしそう", "せいすい", "ちからのたね", "まもりのたね", "すばやさのたね", "いのちのきのみ", "ふしぎなきのみ", "エルフののみぐすり", "せかいじゅのは",
+            "けんじゃのいし", "エリクサー", "ラストエリクサー", "おにぎり", "サンドイッチ", "ポーション", "ハイポーション", "フェニックスの尾", "きんののべぼう", "ガラクタ",
+            "石ころ", "空き缶", "ボロ布", "ただの紙切れ", "ラブレター", "宝の地図", "身代わり人形", "煙玉", "兵糧丸", "激辛カレー",
+            "ステーキ", "ハンバーガー", "ピザ", "寿司", "ラーメン", "うどん", "そば", "パスタ", "オムライス", "グラタン",
+            "ショートケーキ", "プリン", "ゼリー", "アイスクリーム", "チョコレート", "キャンディ", "クッキー", "ドーナツ", "マカロン", "タピオカ",
+            "ダイヤモンド", "ルビー", "サファイア", "エメラルド", "トパーズ", "アメジスト", "オパール", "ガーネット", "アクアマリン", "ペリドット",
+            "鉄鉱石", "銅鉱石", "銀鉱石", "金鉱石", "ミスリル鉱石", "オリハルコン鉱石", "アダマンタイト", "ダークマター", "賢者の石のかけら", "星の砂",
+            "ドラゴンの鱗", "ユニコーンの角", "グリフォンの羽", "スライムの体液", "ゴブリンの腰布", "オークの牙", "吸血鬼の灰", "悪魔のしっぽ", "天使の輪", "神の涙"
+        ];
 
-        // Monster Definitions with IDs for Image Fallback
+        // All Items list for Bestiary
+        const allItemsList = [...weaponNames, ...itemNames].sort();
+
+        // Monster Definitions (unchanged but structure kept)
         const monsterDefs = {
             slime: { id: "slime", name: "スライム", color: "#4488ff", pixels: [{x:5,y:5,w:6,h:1}, {x:3,y:6,w:10,h:1}, {x:2,y:7,w:12,h:1}, {x:1,y:8,w:14,h:4}, {x:2,y:12,w:12,h:1}, {x:4,y:9,w:1,h:1,c:"#000"}, {x:11,y:9,w:1,h:1,c:"#000"}] },
             goblin: { id: "goblin", name: "ゴブリン", color: "#4caf50", pixels: [{x:4,y:3,w:8,h:5}, {x:2,y:4,w:2,h:3}, {x:12,y:4,w:2,h:3}, {x:5,y:5,w:1,h:1,c:"#000"}, {x:10,y:5,w:1,h:1,c:"#000"}, {x:6,y:7,w:4,h:1,c:"#000"}, {x:4,y:8,w:8,h:6}, {x:2,y:9,w:2,h:3}, {x:12,y:9,w:2,h:3}] },
@@ -717,7 +803,6 @@
             updateVisualBtn();
             saveSettings();
             
-            // Redraw current monster if alive and not on result screen
             if (currentMonster && !document.getElementById('overlay').classList.contains('active')) {
                 renderMonsterVisual(currentMonster);
             }
@@ -731,13 +816,9 @@
         function processAutoTurn() {
             if(!isAutoMode || isProcessing) return;
 
-            // Stop if game over screen is showing, handle reset there
             const overlay = document.getElementById('overlay');
             if(overlay.classList.contains('active')) return;
 
-            // STOP Condition: Reached High Score level (Chance to beat it)
-            // If bestRecord.level is 0 (new game), don't stop.
-            // If currentLevel matches bestRecord.level, stop to let user play.
             if(bestRecord.level > 0 && currentLevel === bestRecord.level) {
                 isAutoMode = false;
                 document.getElementById('auto-btn').innerText = "AUTO OFF";
@@ -746,10 +827,8 @@
                 return;
             }
 
-            // Execute Turn
             const choice = Math.random() < 0.5 ? 'left' : 'right';
             
-            // Highlight button briefly
             const btnId = choice === 'left' ? 'btn-yes' : 'btn-no';
             const btn = document.getElementById(btnId);
             btn.style.color = '#ffff00';
@@ -774,7 +853,6 @@
                 log(`[Lv${lvl}] ${currentMonster.name}が あらわれた！`);
                 document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
                 
-                // Auto Mode Trigger for Start
                 if(isAutoMode) {
                     autoTimeout = setTimeout(processAutoTurn, 500);
                 }
@@ -803,13 +881,11 @@
             container.innerHTML = '';
             container.className = ''; 
 
-            // Force Pixel Mode
             if (gameSettings.isPixelMode) {
                 container.innerHTML = generateMonsterSVG(monster);
                 return;
             }
 
-            // Image Priority Mode (Hybrid)
             const imgPath = `img/${monster.id}.png`;
             const img = document.createElement('img');
             img.src = imgPath;
@@ -828,11 +904,10 @@
         }
 
         function makeChoice(choice) {
-            if(isProcessing) return; // Prevent spam
+            if(isProcessing) return; 
             isProcessing = true;
             SoundManager.init();
 
-            // 統計: 総選択回数を加算
             statsRecord.totalChoices++;
             saveData();
 
@@ -852,7 +927,6 @@
         function handleSuccess() {
             SoundManager.playAttack(); 
 
-            // 統計: 成功回数を加算
             statsRecord.totalSuccesses++;
             saveData();
 
@@ -865,7 +939,7 @@
 
             levelUp();
 
-            const nextDelay = isAutoMode ? 400 : 800; // Faster in Auto
+            const nextDelay = isAutoMode ? 400 : 800; 
 
             if (currentLevel === 13) {
                 statsRecord.totalClears++; 
@@ -913,8 +987,15 @@
         function dropItem() {
             let itemName = "";
             if (Math.random() < 0.3) {
-                const tier = Math.min(Math.floor(currentLevel / 3), weaponNames.length - 1);
-                const randIndex = Math.max(0, tier - Math.floor(Math.random() * 2));
+                // Rare Weapons
+                // Logic: higher chance for cool weapons as level increases
+                // Use a wider range of the massive list
+                const maxIdx = weaponNames.length - 1;
+                // tier based on level (max level 13 -> tier around 6-7, but we want full range)
+                // Normalize level 1-13 to index 0-90
+                const tier = Math.min(maxIdx, Math.floor((currentLevel / 13) * maxIdx));
+                const range = 15; // wide variation
+                const randIndex = Math.max(0, Math.min(maxIdx, tier - 5 + Math.floor(Math.random() * range)));
                 itemName = weaponNames[randIndex];
             } else {
                 itemName = itemNames[Math.floor(Math.random() * itemNames.length)];
@@ -947,7 +1028,6 @@
 
             isGameClear = true;
             
-            // Auto Mode stops on Clear
             if(isAutoMode) {
                 isAutoMode = false;
                 document.getElementById('auto-btn').classList.remove('active');
@@ -1002,6 +1082,9 @@
             document.getElementById('alias-val').innerText = alias;
             document.getElementById('true-fate-display').innerText = isClear ? "運命を超越した" : (predeterminedFate === 'left' ? 'はい' : 'いいえ');
             
+            // Add to Collections
+            addToCollection(playerStats.items, alias);
+
             if (isClear) {
                 overlay.classList.add('clear-mode');
                 title.innerText = "GAME CLEAR!!";
@@ -1022,17 +1105,14 @@
             document.getElementById('res-mp').innerText = playerStats.maxMp;
             document.getElementById('res-atk').innerText = playerStats.atk;
             
-            // 統計表示の更新
             document.getElementById('stat-attempts').innerText = statsRecord.totalAttempts;
             document.getElementById('stat-clears').innerText = statsRecord.totalClears;
             document.getElementById('stat-choices').innerText = statsRecord.totalChoices;
             
-            // 的中率の計算
             let rate = 0;
             if (statsRecord.totalChoices > 0) {
                 rate = (statsRecord.totalSuccesses / statsRecord.totalChoices) * 100;
             }
-            // 小数点第1位まで表示 (例: 50.5%)
             document.getElementById('stat-rate').innerText = rate.toFixed(1) + "%";
             
             const lootContainer = document.getElementById('loot-list');
@@ -1125,37 +1205,163 @@
             document.getElementById('prob-val').innerText = probStr;
         }
 
+        // --- Expanded Alias System ---
         function generateAlias(lvl, stats) {
             const total = stats.yes + stats.no;
             if (lvl <= 1) return "瞬殺されし者";
             
             const yesRatio = total > 0 ? stats.yes / total : 0;
-            let prefix = "";
-            if (yesRatio === 1.0) prefix = "全肯定の";
-            else if (yesRatio === 0.0) prefix = "全否定の";
-            else if (yesRatio > 0.8) prefix = "イエスマンな";
-            else if (yesRatio < 0.2) prefix = "疑い深き";
-            else if (yesRatio > 0.6) prefix = "素直な";
-            else if (yesRatio < 0.4) prefix = "偏屈な";
-            else if (Math.abs(stats.yes - stats.no) <= 1) prefix = "中立なる";
-            else prefix = "気まぐれな";
+            
+            // Random Prefixes (Massive List)
+            const randomPrefixes = [
+                "疾風の", "怒涛の", "奇跡の", "不屈の", "孤高の", "漆黒の", "白銀の", "愛の", "悲しみの", 
+                "週末の", "放課後の", "異世界の", "転生した", "最強の", "最弱の", "逆襲の", "覚醒した",
+                "迷子の", "腹ペコの", "寝不足の", "伝説の", "うわさの", "ただの", "期待の", "見習い", "永遠の",
+                "地獄の", "天国の", "虚無の", "約束の", "始まりの", "終わりの", "量産型", "高性能", "ポンコツ",
+                "にわか", "ガチ勢", "課金", "無課金", "ログイン勢", "引退した", "復帰した", "自称", "公認",
+                "選ばれし", "呪われた", "祝福された", "忘れられた", "名もなき", "通りすがりの"
+            ];
+            
+            // Random Suffixes (Massive List)
+            const randomSuffixes = [
+                "旅人", "戦士", "勇者", "魔王", "神", "ニート", "学生", "社長", "アイドル", "猫", "犬", 
+                "スライム", "ドラゴン", "概念", "システム", "バグ", "プログラム", "AI", "アンドロイド", "サイボーグ",
+                "魔法使い", "僧侶", "盗賊", "武闘家", "賢者", "遊び人", "商人", "吟遊詩人", "踊り子", "海賊",
+                "サムライ", "忍者", "ガンナー", "ランサー", "ライダー", "バーサーカー", "キャスター", "アサシン", "セイバー", "アーチャー",
+                "救世主", "破壊者", "創造主", "観測者", "支配者", "超越者", "守護者", "調停者", "反逆者", "復讐者",
+                "おじさん", "おばさん", "お兄さん", "お姉さん", "少年", "少女", "赤ちゃん", "老人", "幽霊", "ゾンビ"
+            ];
 
+            // Deterministic base prefix (Play Style)
+            let basePrefix = "";
+            if (yesRatio === 1.0) basePrefix = "全肯定の";
+            else if (yesRatio === 0.0) basePrefix = "全否定の";
+            else if (yesRatio > 0.8) basePrefix = "イエスマンな";
+            else if (yesRatio < 0.2) basePrefix = "疑い深き";
+            else if (yesRatio > 0.6) basePrefix = "素直な";
+            else if (yesRatio < 0.4) basePrefix = "偏屈な";
+            else if (Math.abs(stats.yes - stats.no) <= 1) basePrefix = "中立なる";
+            else basePrefix = "気まぐれな";
+
+            // Determine final prefix
+            let prefix = basePrefix;
+            // 50% chance to use random flavor prefix instead
+            if (Math.random() > 0.5) {
+                prefix = randomPrefixes[Math.floor(Math.random() * randomPrefixes.length)];
+            }
+
+            // Determine Suffix based on level tier + random
             let suffix = "";
-            if (lvl < 5) suffix = "村人";
-            else if (lvl < 10) suffix = "冒険者";
-            else if (lvl < 15) suffix = "戦士";
-            else if (lvl < 20) suffix = "熟練者";
-            else if (lvl < 25) suffix = "英雄";
-            else if (lvl < 30) suffix = "勇者";
-            else if (lvl < 40) suffix = "伝説";
-            else if (lvl < 50) suffix = "半神";
-            else suffix = "神";
+            const tier = Math.floor(lvl / 2); // 0 to 6+
+            
+            // Create a subset of suffixes appropriate for level
+            let suffixPool = [];
+            if (tier <= 2) {
+                suffixPool = randomSuffixes.slice(0, 15); // Basic jobs/misc
+            } else if (tier <= 5) {
+                suffixPool = randomSuffixes.slice(15, 40); // Advanced jobs
+            } else {
+                suffixPool = randomSuffixes.slice(40); // Epic/Godly titles
+            }
+            
+            // Add a chance to pick ANY suffix for chaos
+            if(Math.random() < 0.1) suffixPool = randomSuffixes;
+            
+            suffix = suffixPool[Math.floor(Math.random() * suffixPool.length)];
 
+            // Special Overrides (Fixed Titles for specific feats)
             if (lvl === 13) return "運命の超越者";
             if (lvl === 7 && yesRatio === 1.0) return "ラッキーセブン";
-            if (lvl > 20 && yesRatio === 0.5) return "天秤の守護者";
+            if (lvl > 10 && playerStats.items.includes("ねぎ")) return "ねぎの使い手";
+            if (playerStats.items.length > 8 && lvl < 8) return "買い物上手";
+            if (lvl === 1 && Math.random() < 0.01) return "出落ち";
 
             return prefix + suffix;
+        }
+
+        // --- Bestiary / Collection ---
+        
+        function addToCollection(newItems, newAlias) {
+            if(!statsRecord.collectedItems) statsRecord.collectedItems = [];
+            if(!statsRecord.collectedAliases) statsRecord.collectedAliases = [];
+            
+            newItems.forEach(item => {
+                if(!statsRecord.collectedItems.includes(item)) {
+                    statsRecord.collectedItems.push(item);
+                }
+            });
+            
+            if(newAlias && !statsRecord.collectedAliases.includes(newAlias)) {
+                statsRecord.collectedAliases.push(newAlias);
+            }
+            saveData();
+        }
+
+        function openBestiary() {
+            document.getElementById('bestiary-overlay').classList.add('active');
+            switchBestiaryTab('items');
+        }
+
+        function closeBestiary() {
+            document.getElementById('bestiary-overlay').classList.remove('active');
+        }
+
+        function switchBestiaryTab(tab) {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(t => t.classList.remove('active'));
+            // Very simple tab switching logic relying on order or text
+            if(tab === 'items') tabs[0].classList.add('active');
+            else tabs[1].classList.add('active');
+
+            renderBestiaryContent(tab);
+        }
+
+        function renderBestiaryContent(tab) {
+            const container = document.getElementById('bestiary-content');
+            container.innerHTML = '';
+            
+            const collected = tab === 'items' ? (statsRecord.collectedItems || []) : (statsRecord.collectedAliases || []);
+            const allList = tab === 'items' ? allItemsList : collected; // Aliases don't have a fixed "All List" easily, so just show collected
+            
+            const listEl = document.createElement('div');
+            listEl.className = 'collection-list';
+
+            if(tab === 'items') {
+                // Show completion rate for items
+                const rate = Math.floor((collected.length / allItemsList.length) * 100);
+                document.getElementById('collection-rate').innerText = rate + "%";
+
+                allList.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'collection-item';
+                    if(collected.includes(item)) {
+                        el.innerText = item;
+                        el.classList.add('unlocked');
+                    } else {
+                        el.innerText = "？？？？";
+                    }
+                    listEl.appendChild(el);
+                });
+            } else {
+                // Aliases: just list collected
+                document.getElementById('collection-rate').innerText = collected.length + "種";
+                
+                // Show most recent first
+                [...collected].reverse().forEach(alias => {
+                    const el = document.createElement('div');
+                    el.className = 'collection-item alias-item unlocked';
+                    el.innerText = alias;
+                    listEl.appendChild(el);
+                });
+                if(collected.length === 0) {
+                    const el = document.createElement('div');
+                    el.className = 'collection-item alias-item';
+                    el.innerText = "まだ称号を獲得していません";
+                    listEl.appendChild(el);
+                }
+            }
+            
+            container.appendChild(listEl);
         }
 
         // --- Settings Management ---
@@ -1186,18 +1392,19 @@
             const statsRaw = localStorage.getItem('abyss_rpg_stats_v1');
             if(statsRaw) {
                 const loaded = JSON.parse(statsRaw);
-                // 既存データに新しいフィールドがない場合のデフォルト値を設定
                 statsRecord = {
                     totalAttempts: loaded.totalAttempts || 0,
                     totalClears: loaded.totalClears || 0,
                     totalChoices: loaded.totalChoices || 0,
-                    totalSuccesses: loaded.totalSuccesses || 0
+                    totalSuccesses: loaded.totalSuccesses || 0,
+                    collectedItems: loaded.collectedItems || [],
+                    collectedAliases: loaded.collectedAliases || []
                 };
             } else {
-                statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0 };
+                statsRecord = { totalAttempts: 0, totalClears: 0, totalChoices: 0, totalSuccesses: 0, collectedItems: [], collectedAliases: [] };
             }
             
-            loadSettings(); // Load visual settings
+            loadSettings(); 
         }
     </script>
 </body>
