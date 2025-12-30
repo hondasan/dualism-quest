@@ -79,7 +79,7 @@ body.true-demon-mode {
 /* Sidebar (Log) */
 #sidebar {
     width: 100%;
-    height: 150px;
+    height: 120px; /* 縮小してスペース確保 (150px -> 120px) */
     background: #000;
     display: flex;
     flex-direction: column;
@@ -148,7 +148,7 @@ body.true-demon-mode {
     #game-area { order: 2; padding: 20px; overflow-y: hidden; }
 }
 
-/* Top Controls (修正: ヘッダーとして配置) */
+/* Top Controls */
 .top-controls {
     width: 100%;
     display: flex;
@@ -157,7 +157,6 @@ body.true-demon-mode {
     align-items: center;
     margin-bottom: 10px;
     padding-bottom: 5px;
-    /* border-bottom: 1px dashed #333; 必要なら線を入れる */
 }
 
 .highscore-display { 
@@ -239,12 +238,20 @@ body.true-demon-mode {
     align-items: center;
     position: relative;
     margin-bottom: 10px;
-    min-height: 120px; /* スマホで縦長になりすぎないよう調整 */
+    min-height: 80px; /* 高さを確保しすぎないように縮小 (120px -> 80px) */
+    flex-shrink: 1; /* 画面が狭い時に縮小可能にする */
 }
 
 #monster-visual {
-    width: 160px; /* 少し小さくして画面収まりを良くする */
-    height: 160px;
+    width: auto;
+    height: auto;
+    max-width: 160px; 
+    max-height: 160px;
+    
+    /* 画面高さに対する制限を追加して見切れ防止 */
+    max-height: 25vh; 
+    aspect-ratio: 1 / 1; 
+
     transition: transform 0.1s;
     display: flex;
     justify-content: center;
@@ -348,6 +355,33 @@ body.true-demon-mode {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+/* 画面の高さが短い場合、またはスマホ向けに選択肢を横並びにする調整 */
+@media (max-height: 650px) {
+    .command-window {
+        justify-content: center; /* 中央寄せ */
+    }
+    .choices-container {
+        width: 100%; /* 幅いっぱいに */
+        flex-direction: row; /* 横並び */
+        justify-content: space-around; /* 均等配置 */
+        padding: 10px;
+    }
+    .choice-btn {
+        width: 45%; /* ボタン幅を広げる */
+        text-align: center;
+        padding: 10px 0; /* タップしやすく */
+        border: 1px solid #333; /* 境界線をうっすらつけてボタン感アップ */
+        border-radius: 4px;
+    }
+    .choice-btn:hover::before, .choice-btn:active::before {
+        display: none; /* 横並び時はカーソルアイコンを消す（レイアウト崩れ防止） */
+    }
+    /* 選択中のスタイル（代わりの強調表現） */
+    .choice-btn:active {
+        background-color: #333;
+    }
 }
 
 .choice-btn {
