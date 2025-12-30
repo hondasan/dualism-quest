@@ -300,7 +300,8 @@ function startLevel(lvl) {
         document.getElementById('message-window').innerText = `${currentMonster.name}「${getRandomQuestion()}」`;
         
         if(isAutoMode) {
-            autoTimeout = setTimeout(processAutoTurn, 500);
+            // Speed up: 500 -> 250
+            autoTimeout = setTimeout(processAutoTurn, 250);
         }
     }
 }
@@ -515,7 +516,8 @@ function executeSuccess() {
     }
     levelUp(levelGain);
 
-    const nextDelay = isAutoMode ? 400 : 800; 
+    // Speed up: 400 or 800 -> 200 or 800
+    const nextDelay = isAutoMode ? 200 : 800; 
 
     if (currentFloor === 13) {
         if (currentMonster.id === 'true_demon') {
@@ -546,7 +548,8 @@ function executeSuccess() {
             
             isProcessing = false;
             if(isAutoMode) {
-                autoTimeout = setTimeout(processAutoTurn, 400);
+                // Speed up: 400 -> 200
+                autoTimeout = setTimeout(processAutoTurn, 200);
             }
         }, nextDelay);
     }
@@ -644,7 +647,8 @@ function executeFailure() {
 
     checkHighScore(); 
 
-    const failDelay = isAutoMode ? 500 : 1000;
+    // Speed up: 500 or 1000 -> 250 or 1000
+    const failDelay = isAutoMode ? 250 : 1000;
     setTimeout(() => {
         showGameOver(false);
     }, failDelay);
@@ -781,9 +785,10 @@ function showGameOver(isClear) {
 
     // Auto Retry
     if(isAutoMode && !isGameClear) {
+        // Speed up: 1000 -> 500
         autoTimeout = setTimeout(() => {
             resetGame();
-        }, 1000);
+        }, 500);
     }
 }
 
